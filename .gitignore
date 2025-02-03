@@ -1,5 +1,8 @@
 *.swp
+.clangd
 .DS_Store
 *.d
+*.pcm
 *.so
 *.root
+ana/*

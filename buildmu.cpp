@@ -3,6 +3,9 @@
 #include "TString.h"
 #include <TFile.h>
 #include <TF1.h>
+#include <TCanvas.h>
+#include <TH1D.h>
+#include <TH2D.h>
 #include <TTree.h>
 #include <THnSparse.h>
 #include <TArrayF.h>
@@ -14,24 +17,26 @@
 #include <string>
 #include <vector>
 
-#include "DUNEVisUtils.hpp"
 #include "file_list.hpp"
 
 
 // --- HARD CODE HERE ----------------
 // size_t n_opdet = 30; // 480
-size_t n_opdet = 50; // 480
+size_t n_opdet = 480; // 480
 float light_yield = 27000;
 float arapuca_pde = 0.02;
 
-double min_visibility = 1.e-10;
+double min_visibility = 1.e-60;
 double hit_threshold = 1.5; // Will integrate Poisson [0, hit_threshold]
+
+TString visibility_file_name = "./dunevis_fdhd_1x2x6_test_photovisAr.root";
+std::string ana_folder_name = "ana/"; // Folder where the ana files.root
 // -----------------------------------
 
 void buildmu(){
   
   // --- VISIBILITY STUFF -------------------------------------------------------
-  TFile* visibility_file = TFile::Open("./dunevis_fdhd_1x2x6_test_photovisAr.root", "READ");
+  TFile* visibility_file = TFile::Open(visibility_file_name, "READ");
   // Get the pointer for each opdet
   THnSparseT<TArrayF>* h3VisMap_opDet[n_opdet];
   for(int idx_opdet=0; idx_opdet<n_opdet; idx_opdet++){
@@ -53,6 +58,11 @@ void buildmu(){
 
   TH2D* h2_Mu_Pe = new TH2D("h2_Mu_Pe", Form("%s;%s;%s", "", "Pe", "Mu"), 500, 0., 100., 500, 0, 100);
 
+  TH2D* h2_HitTime_HitPe = new TH2D("h2_HitTime_HitPe", Form("%s;%s;%s", "", "HitTime", "HitPe"),
+                                    200, -1.5, 1.5,
+                                    200, 0, 100.);
+
+  // TH2D for events where expected_photons > 5 and no detection
   TH2D* hfail_Etrue_OpDet = new TH2D("hfail_Etrue_OpDet",Form("%s;%s;%s","hfail_Etrue_OpDet","OpDet","Etrue"),
                                      n_opdet, 0., double(n_opdet),
                                      90, 0., 20.);
@@ -80,7 +90,7 @@ void buildmu(){
   for(const auto &file_name : file_list){
     // --- ANA STUFF -----------------------------------------------------------
     std::cout << file_name << std::endl;
-    TFile* ana_file = TFile::Open(("ana/"+file_name).c_str(), "READ");
+    TFile* ana_file = TFile::Open((ana_folder_name+file_name).c_str(), "READ");
     TDirectory* dir = (TDirectory*)ana_file->Get("solarnuana");
     TTree* tree = (TTree*)(dir->Get("MCTruthTree"));
 
@@ -88,6 +98,7 @@ void buildmu(){
     float E_true, x_true, y_true, z_true;
     std::vector<float>* OpHitPes = nullptr;
     std::vector<float>* OpHitChannels = nullptr;
+    std::vector<float>* OpHitTimes = nullptr;
     tree->SetBranchAddress("SignalParticleE", &E_true);
     tree->SetBranchAddress("SignalParticleX", &x_true);
     tree->SetBranchAddress("SignalParticleY", &y_true);
@@ -95,17 +106,17 @@ void buildmu(){
 
     tree->SetBranchAddress("OpHitPE", &OpHitPes);
     tree->SetBranchAddress("OpHitChannel", &OpHitChannels);
+    tree->SetBranchAddress("OpHitTime", &OpHitTimes);
   
     // --- LOOP OVER TREE -----------------------------------------------------
     Long64_t nEntries = tree->GetEntries();
     for (Long64_t idx_entry = 0; idx_entry < nEntries; ++idx_entry) {
       tree->GetEntry(idx_entry);
       double exp_ph;
-      // std::cout << "Coord " << x_true << " " << y_true << " " << z_true << std::endl;
       double Fq = 0.;
 
-
-      for(int idx_opdet=0; idx_opdet<n_opdet; idx_opdet++){
+      // --- LOOP OVER OPDETS -------------------------------------------------
+      for(size_t idx_opdet=0; idx_opdet<n_opdet; idx_opdet++){
         int idx_bin[3];
         idx_bin[0] = h3VisMap_opDet[idx_opdet]->GetAxis(0)->FindBin(x_true);
         idx_bin[1] = h3VisMap_opDet[idx_opdet]->GetAxis(1)->FindBin(y_true);
@@ -132,10 +143,11 @@ void buildmu(){
             //   y_true << "\t" << z_true << "\t" << std::endl;
             // }
           h2_Mu_Pe->Fill((*OpHitPes)[idx_hit], exp_ph);
+          h2_HitTime_HitPe->Fill((*OpHitTimes)[idx_hit], (*OpHitPes)[idx_hit]);
         } else {
           term = 1. - P_hit_mu;
           h2_Mu_Pe->Fill(0., exp_ph);
-          if (exp_ph > 5. ){
+          if (exp_ph > 5.){
             // std::cout << idx_entry << "\t" << idx_opdet << "\t" << E_true << "\t" << x_true << "\t" <<
             //   y_true << "\t" << z_true << "\t" << std::endl;
             hfail_Etrue_OpDet->Fill(idx_opdet, E_true);
@@ -151,18 +163,26 @@ void buildmu(){
         //   std::cout << idx_opdet << std::endl; 
         // }
 
-      }
+      } // end loop over opdets
      
       for(size_t idx_hit=0; idx_hit<(*OpHitChannels).size(); idx_hit++){
         h_Reco_Ophit_OpDet->Fill((*OpHitChannels)[idx_hit], (*OpHitPes)[idx_hit]);
-      }
-    }
+      } 
+    } // end loop over tree
 
     ana_file->Close();
+  } // end loop over ana files
 
+
+  // for each bin in the x-axis of h2_Mu_Pe project on the y-axis and normalize
+  // the projection to have area=1
+  for(int idx_x=1; idx_x<=h2_Mu_Pe->GetNbinsX(); idx_x++){
+    TH1D* h1_proj = h2_Mu_Pe->ProjectionY("h1_proj", idx_x, idx_x);
+    h1_proj->Scale(1./h1_proj->Integral());
+    for(int idx_y=1; idx_y<=h2_Mu_Pe->GetNbinsY(); idx_y++){
+      h2_Mu_Pe->SetBinContent(idx_x, idx_y, h1_proj->GetBinContent(idx_y));
+    }
   }
-
-
 
   
 
@@ -188,20 +208,21 @@ void buildmu(){
   hfail_Ztrue_OpDet->Draw("colz");
   cfail_Ztrue_Opdet->Modified(); cfail_Ztrue_Opdet->Update();
 
-
-
   TCanvas* c_Ophit_OpDet= new TCanvas("c_Ophit_OpDet","c_Ophit_OpDet",0,0,800,600);
   c_Ophit_OpDet->cd();
   h_Expected_Ophit_OpDet->Draw();
   h_Reco_Ophit_OpDet->Draw("same");
   c_Ophit_OpDet->Modified(); c_Ophit_OpDet->Update();
-  // h_Reco_Ophit_OpDet->Draw();
-  //
 
   TCanvas* c_Mu_Pe = new TCanvas("c_Mu_Pe ","c_Mu_Pe ",0,0,800,600);
   c_Mu_Pe ->cd();
   h2_Mu_Pe->Draw("colz");
   c_Mu_Pe ->Modified(); c_Mu_Pe ->Update();
+
+  TCanvas* c_HitTime_HitPE = new TCanvas("c_HitTime_HitPE","c_HitTime_HitPE",0,0,800,600);
+  c_HitTime_HitPE->cd();
+  h2_HitTime_HitPe->Draw("colz"); 
+  c_HitTime_HitPE->Modified(); c_HitTime_HitPE->Update();
 
   // TCanvas* c_Eff_ExpReco = new TCanvas("c_Eff_ExpReco","c_Eff_ExpReco",0,0,800,600);
   // c_Eff_ExpReco->cd();
