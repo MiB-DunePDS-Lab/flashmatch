@@ -1,0 +1,52 @@
+---
+path:
+  - name:         GEN
+    subdir:       gen
+    fcl:          ./fcl/prod_eminus_20MeV_uniform_dune10kt_1x2x6.fcl
+    ofile:        prod_eminus_20MeV_uniform_dune10kt_1x2x6_gen
+
+  - name:         Geant4
+    subdir:       g4
+    fcl:          ./fcl/supernova_g4_dune10kt_1x2x6.fcl
+    ofile:        prod_eminus_20MeV_uniform_dune10kt_1x2x6_gen_g4
+
+  - name:         Detsim
+    subdir:       detsim
+    fcl:          standard_detsim_dune10kt_1x2x6.fcl
+    ofile:        prod_eminus_20MeV_uniform_dune10kt_1x2x6_gen_g4_detsim
+    job_config:
+      expected-lifetime: 9h
+      timeout: 9h
+
+  - name:         Reco1
+    subdir:       reco1
+    fcl:          reco1_supernova_dune10kt_1x2x6.fcl
+    ofile:        prod_eminus_20MeV_uniform_dune10kt_1x2x6_gen_g4_detsim_reco1
+
+  - name:         Reco2
+    subdir:       reco2
+    fcl:          standard_reco2_dune10kt_1x2x6.fcl 
+    ofile:        prod_eminus_20MeV_uniform_dune10kt_1x2x6_gen_g4_detsim_reco1_reco2
+    job_config:
+      expected-lifetime: 4h
+      timeout: 4h
+
+  - name:         Ana
+    subdir:       ana
+    fcl:          ./fcl/my_solar_ana_single_dune10kt_1x2x6.fcl 
+    outputs:
+      - solar_ana_dune10kt_1x2x6_hist.root
+
+global:
+  nfiles: 2000
+  nevents: 100
+  dune_version: v10_01_04d00
+  dune_qual: e26:prof
+  odir: /pnfs/dune/scratch/users/fgalizzi/prod_eminus/
+  job_config:
+    group: dune
+    expected-lifetime: 3h
+    memory: 4000
+    timeout: 3h
+    OS: SL7
+    singularity-image: /cvmfs/singularity.opensciencegrid.org/fermilab/fnal-wn-sl7:latest
