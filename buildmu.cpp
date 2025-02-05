@@ -79,6 +79,12 @@ void buildmu(){
   TH2D* hfail_Ztrue_OpDet = new TH2D("hfail_Ztrue_OpDet",Form("%s;%s;%s","hfail_Ztrue_OpDet","OpDet","Ztrue"),
                                      n_opdet, 0., double(n_opdet),
                                      90, 0., 1400.);
+  
+  TH2D* h_Ghost = new TH2D("h_Ghost",Form("%s;%s;%s", "Reco_Ghost", "Event", "Reco_Ghost") 
+                           , 100, 0, 100, 100, 0, 100); //Ghost PE-> Photons we need ignoring.
+  
+  TH2D* h_Residual = new TH2D("h_Residual",Form("%s;%s;%s", "", "Reco-True/True", "True") 
+                              , 100, -1000, 1000, 100, 0, 1000);  //*100
 
   // TEfficiency* he_Ophit_OpDet = nullptr;
   
@@ -109,6 +115,7 @@ void buildmu(){
     for (Long64_t idx_entry = 0; idx_entry < nEntries; ++idx_entry) {
       tree->GetEntry(idx_entry);
       double exp_ph;
+      double exp_ph_min;
       double Fq = 0.;
 
       // --- LOOP OVER OPDETS -------------------------------------------------
@@ -121,7 +128,8 @@ void buildmu(){
         
 
         exp_ph = E_true*light_yield*voxel_vis*arapuca_pde;
-        if(exp_ph==0.) exp_ph = E_true*light_yield*min_visibility*arapuca_pde;
+        exp_ph_min = E_true*light_yield*min_visibility*arapuca_pde;
+        if(exp_ph==0.) exp_ph = exp_ph_min;
         h_Expected_Ophit_OpDet->Fill(idx_opdet, exp_ph);
 
 
@@ -130,6 +138,18 @@ void buildmu(){
         if(idx_hit != (*OpHitChannels).size()){ 
           h2_exp_reco->Fill((*OpHitPes)[idx_hit], exp_ph);
           h2_HitTime_HitPe->Fill((*OpHitTimes)[idx_hit], (*OpHitPes)[idx_hit]);
+
+          //--------Residual --------------------
+          //if (exp_ph > exp_ph_min){
+                h_Residual->Fill(((((*OpHitPes)[idx_hit])- exp_ph)/exp_ph)*100, exp_ph); 
+             // }
+         
+          //------Found the Ghost PE-------
+           if(exp_ph == exp_ph_min && (*OpHitPes)[idx_hit] > 0.0 ){    //true==0, ophit>0 per opdet??
+              h_Ghost->Fill(event_true, (*OpHitPes)[idx_hit]); 
+              //std::cout << "event_true" << event_true << "--"<<(*OpHitPes)[idx_hit] << std::endl;
+             } //Ghost PE
+               
         } else {
           h2_exp_reco->Fill(0., exp_ph);
           if (exp_ph > 5.){
@@ -196,6 +216,16 @@ void buildmu(){
   c_HitTime_HitPE->cd();
   h2_HitTime_HitPe->Draw("colz"); 
   c_HitTime_HitPE->Modified(); c_HitTime_HitPE->Update();
+
+  TCanvas* c_Ghost= new TCanvas("c_Ghost","c_Ghost",0,0,800,600);
+  c_Ghost->cd();
+  h_Ghost->Draw("colz");
+  c_Ghost->Modified(); c_Ghost->Update();
+
+  TCanvas* c_Resid= new TCanvas("c_Resid","c_Resid",0,0,800,600);
+  c_Resid->cd();
+  h_Residual->Draw("colz");
+  c_Resid->Modified(); c_Resid->Update();
 
   // TCanvas* c_Eff_ExpReco = new TCanvas("c_Eff_ExpReco","c_Eff_ExpReco",0,0,800,600);
   // c_Eff_ExpReco->cd();
