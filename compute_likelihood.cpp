@@ -145,20 +145,16 @@ void compute_likelihood(){
           term = 1. - P_hit_mu;
           term_fake = 1. - P_hit_mu_fake;
         }
+
         Fq += -log(term);
         Fq_fake += -log(term_fake);
-
-
       } // end loop over opdets
-      if(Fq_fake < Fq){
-        fake_counter++;
-      }
+      
+      if(Fq_fake < Fq) fake_counter++;
       evt_counter++;
-
-
     } // end loop over tree
+    
     ana_file->Close();
-
     std::cout << "Fake counter: " << fake_counter << "/" << evt_counter << std::endl;
   } // end loop over ana files
 
