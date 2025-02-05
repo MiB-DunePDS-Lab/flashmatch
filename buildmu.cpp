@@ -17,6 +17,7 @@
 #include <string>
 #include <vector>
 
+#include "DUNEVisUtils.hpp" 
 #include "file_list.hpp"
 
 
@@ -56,7 +57,7 @@ void buildmu(){
                                           n_opdet, 0., double(n_opdet));
   h_Reco_Ophit_OpDet->SetLineColor(kRed);
 
-  TH2D* h2_Mu_Pe = new TH2D("h2_Mu_Pe", Form("%s;%s;%s", "", "Pe", "Mu"), 500, 0., 100., 500, 0, 100);
+  TH2D* h2_exp_reco = new TH2D("h2_exp_reco", Form("%s;%s;%s", "", "Pe", "Mu"), 500, 0., 100., 500, 0, 100);
 
   TH2D* h2_HitTime_HitPe = new TH2D("h2_HitTime_HitPe", Form("%s;%s;%s", "", "HitTime", "HitPe"),
                                     200, -1.5, 1.5,
@@ -81,11 +82,6 @@ void buildmu(){
 
   // TEfficiency* he_Ophit_OpDet = nullptr;
   
-  // --- PDF -------------------------------------------------------------------
-  TF1* pdf_poisson = new TF1("pdf_poisson", "TMath::Poisson(x, [0])");
-  pdf_poisson->SetNpx(10000);
-
-
   // --- LOOP OVER ANA FILES ---------------------------------------------------
   for(const auto &file_name : file_list){
     // --- ANA STUFF -----------------------------------------------------------
@@ -129,24 +125,13 @@ void buildmu(){
         h_Expected_Ophit_OpDet->Fill(idx_opdet, exp_ph);
 
 
-        // Compute a single term of the Fq summatory
-        double term = 0.;
-        
-        pdf_poisson->SetParameter(0, exp_ph);
-        double P_hit_mu = 1. - pdf_poisson->Integral(0., hit_threshold, 1e-5);
-
         auto it = std::find((*OpHitChannels).begin(), (*OpHitChannels).end(), float(idx_opdet));
         size_t idx_hit = std::distance((*OpHitChannels).begin(), it);
         if(idx_hit != (*OpHitChannels).size()){ 
-          term = P_hit_mu*pdf_poisson->Eval((*OpHitPes)[idx_hit]);
-            // if(x_true<200) {std::cout << idx_entry << "\t" << idx_opdet << "\t" << E_true << "\t" << x_true << "\t" <<
-            //   y_true << "\t" << z_true << "\t" << std::endl;
-            // }
-          h2_Mu_Pe->Fill((*OpHitPes)[idx_hit], exp_ph);
+          h2_exp_reco->Fill((*OpHitPes)[idx_hit], exp_ph);
           h2_HitTime_HitPe->Fill((*OpHitTimes)[idx_hit], (*OpHitPes)[idx_hit]);
         } else {
-          term = 1. - P_hit_mu;
-          h2_Mu_Pe->Fill(0., exp_ph);
+          h2_exp_reco->Fill(0., exp_ph);
           if (exp_ph > 5.){
             // std::cout << idx_entry << "\t" << idx_opdet << "\t" << E_true << "\t" << x_true << "\t" <<
             //   y_true << "\t" << z_true << "\t" << std::endl;
@@ -156,13 +141,6 @@ void buildmu(){
             hfail_Ztrue_OpDet->Fill(idx_opdet, z_true);
           }
         }
-        Fq += -log(term);
-
-
-        // if(abs((*OpHitPes)[idx_hit]-exp_ph)>10 && (*OpHitPes)[idx_hit]<1.){
-        //   std::cout << idx_opdet << std::endl; 
-        // }
-
       } // end loop over opdets
      
       for(size_t idx_hit=0; idx_hit<(*OpHitChannels).size(); idx_hit++){
@@ -174,16 +152,11 @@ void buildmu(){
   } // end loop over ana files
 
 
-  // for each bin in the x-axis of h2_Mu_Pe project on the y-axis and normalize
-  // the projection to have area=1
-  for(int idx_x=1; idx_x<=h2_Mu_Pe->GetNbinsX(); idx_x++){
-    TH1D* h1_proj = h2_Mu_Pe->ProjectionY("h1_proj", idx_x, idx_x);
-    h1_proj->Scale(1./h1_proj->Integral());
-    for(int idx_y=1; idx_y<=h2_Mu_Pe->GetNbinsY(); idx_y++){
-      h2_Mu_Pe->SetBinContent(idx_x, idx_y, h1_proj->GetBinContent(idx_y));
-    }
-  }
 
+  // --- SAVE -------------------------------------------------------------------
+  TFile* out_file = TFile::Open("h2_exp_reco.root", "RECREATE");
+  h2_exp_reco->Write();
+  out_file->Close();
   
 
 
@@ -216,7 +189,7 @@ void buildmu(){
 
   TCanvas* c_Mu_Pe = new TCanvas("c_Mu_Pe ","c_Mu_Pe ",0,0,800,600);
   c_Mu_Pe ->cd();
-  h2_Mu_Pe->Draw("colz");
+  h2_exp_reco->Draw("colz");
   c_Mu_Pe ->Modified(); c_Mu_Pe ->Update();
 
   TCanvas* c_HitTime_HitPE = new TCanvas("c_HitTime_HitPE","c_HitTime_HitPE",0,0,800,600);

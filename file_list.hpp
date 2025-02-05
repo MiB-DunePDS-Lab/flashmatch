@@ -190,9 +190,7 @@ std::vector<std::string> file_list = {
   "solar_ana_dune10kt_1x2x6_hist_1377.root",
   "solar_ana_dune10kt_1x2x6_hist_1378.root",
   "solar_ana_dune10kt_1x2x6_hist_1379.root",
-  "solar_ana_dune10kt_1x2x6_hist_1380.root"
-};
-/*
+  "solar_ana_dune10kt_1x2x6_hist_1380.root",
   "solar_ana_dune10kt_1x2x6_hist_1381.root",
   "solar_ana_dune10kt_1x2x6_hist_1388.root",
   "solar_ana_dune10kt_1x2x6_hist_1396.root",
@@ -778,5 +776,4 @@ std::vector<std::string> file_list = {
   "solar_ana_dune10kt_1x2x6_hist_993.root",
   "solar_ana_dune10kt_1x2x6_hist_994.root",
 };
-*/
 
