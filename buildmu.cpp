@@ -98,6 +98,7 @@ void buildmu(){
 
     // Set branches
     float E_true, x_true, y_true, z_true;
+    int event_true;
     std::vector<float>* OpHitPes = nullptr;
     std::vector<float>* OpHitChannels = nullptr;
     std::vector<float>* OpHitTimes = nullptr;
@@ -105,6 +106,7 @@ void buildmu(){
     tree->SetBranchAddress("SignalParticleX", &x_true);
     tree->SetBranchAddress("SignalParticleY", &y_true);
     tree->SetBranchAddress("SignalParticleZ", &z_true);
+    tree->SetBranchAddress("Event", &event_true);
 
     tree->SetBranchAddress("OpHitPE", &OpHitPes);
     tree->SetBranchAddress("OpHitChannel", &OpHitChannels);
