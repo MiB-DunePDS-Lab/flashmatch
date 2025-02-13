@@ -22,10 +22,10 @@
 
 
 // --- HARD CODE HERE ----------------
-// size_t n_opdet = 30; // 480
+// size_t n_opdet = 8; // 480
 size_t n_opdet = 480; // 480
 float light_yield = 27000;
-float arapuca_pde = 0.02;
+float arapuca_pde = 0.03;
 
 double min_visibility = 1.e-60;
 double hit_threshold = 1.5; // Will integrate Poisson [0, hit_threshold]
@@ -35,7 +35,8 @@ std::string ana_folder_name = "ana/"; // Folder where the ana files.root
 // -----------------------------------
 
 void buildmu(){
-  
+  gStyle->SetPalette(kSunset);
+ 
   // --- VISIBILITY STUFF -------------------------------------------------------
   TFile* visibility_file = TFile::Open(visibility_file_name, "READ");
   // Get the pointer for each opdet
@@ -57,11 +58,19 @@ void buildmu(){
                                           n_opdet, 0., double(n_opdet));
   h_Reco_Ophit_OpDet->SetLineColor(kRed);
 
-  TH2D* h2_exp_reco = new TH2D("h2_exp_reco", Form("%s;%s;%s", "", "Pe", "Mu"), 500, 0., 100., 500, 0, 100);
+  TH1D* h_Expected_Pe = new TH1D("h_Expected_Pe",
+                                 Form("%s;%s;%s","h_Expected_Pe","PE","Detection Probability"),
+                                 300, 0., 200.);
+  
+  TH1D* h_Expected_PeReco = new TH1D("h_Expected_PeReco",
+                                     Form("%s;%s;%s","h_Expected_PeReco","x","y"),
+                                     300, 0., 200.);
 
-  TH2D* h2_HitTime_HitPe = new TH2D("h2_HitTime_HitPe", Form("%s;%s;%s", "", "HitTime", "HitPe"),
-                                    200, -1.5, 1.5,
-                                    200, 0, 100.);
+  TH2D* h2_exp_reco = new TH2D("h2_exp_reco", Form("%s;%s;%s", "", "Reco #Pe", "Expected #Pe"), 800, 0., 200., 800, 0, 200);
+
+  TH2D* h2_ExpPe_HitTime = new TH2D("h2_HitPe_HitTime", Form("%s;%s;%s", "", "HitTime [ticks]", "Expected #Pe"),
+                                    200, -1.5, 4.5,
+                                    200, 0, 200.);
 
   // TH2D for events where expected_photons > 5 and no detection
   TH2D* hfail_Etrue_OpDet = new TH2D("hfail_Etrue_OpDet",Form("%s;%s;%s","hfail_Etrue_OpDet","OpDet","Etrue"),
@@ -116,7 +125,6 @@ void buildmu(){
       tree->GetEntry(idx_entry);
       double exp_ph;
       double exp_ph_min;
-      double Fq = 0.;
 
       // --- LOOP OVER OPDETS -------------------------------------------------
       for(size_t idx_opdet=0; idx_opdet<n_opdet; idx_opdet++){
@@ -131,22 +139,24 @@ void buildmu(){
         exp_ph_min = E_true*light_yield*min_visibility*arapuca_pde;
         if(exp_ph==0.) exp_ph = exp_ph_min;
         h_Expected_Ophit_OpDet->Fill(idx_opdet, exp_ph);
+        h_Expected_Pe->Fill(exp_ph);
 
 
         auto it = std::find((*OpHitChannels).begin(), (*OpHitChannels).end(), float(idx_opdet));
         size_t idx_hit = std::distance((*OpHitChannels).begin(), it);
         if(idx_hit != (*OpHitChannels).size()){ 
           h2_exp_reco->Fill((*OpHitPes)[idx_hit], exp_ph);
-          h2_HitTime_HitPe->Fill((*OpHitTimes)[idx_hit], (*OpHitPes)[idx_hit]);
+          h2_ExpPe_HitTime->Fill((*OpHitTimes)[idx_hit], exp_ph);
+          h_Expected_PeReco->Fill(exp_ph);
 
           //--------Residual --------------------
           //if (exp_ph > exp_ph_min){
-                h_Residual->Fill(((((*OpHitPes)[idx_hit])- exp_ph)/exp_ph)*100, exp_ph); 
+                h_Residual->Fill(((((*OpHitPes)[idx_hit])-exp_ph)/exp_ph)*100, exp_ph); 
              // }
          
           //------Found the Ghost PE-------
            if(exp_ph == exp_ph_min && (*OpHitPes)[idx_hit] > 0.0 ){    //true==0, ophit>0 per opdet??
-              h_Ghost->Fill(event_true, (*OpHitPes)[idx_hit]); 
+              h_Ghost->Fill(exp_ph, (*OpHitPes)[idx_hit]); 
               //std::cout << "event_true" << event_true << "--"<<(*OpHitPes)[idx_hit] << std::endl;
              } //Ghost PE
                
@@ -177,6 +187,10 @@ void buildmu(){
   TFile* out_file = TFile::Open("h2_exp_reco.root", "RECREATE");
   h2_exp_reco->Write();
   out_file->Close();
+
+  TFile* out_file2 = TFile::Open("h2_ExpPe_HitTime.root", "RECREATE");
+  h2_ExpPe_HitTime->Write();
+  out_file2->Close();
   
 
 
@@ -214,7 +228,7 @@ void buildmu(){
 
   TCanvas* c_HitTime_HitPE = new TCanvas("c_HitTime_HitPE","c_HitTime_HitPE",0,0,800,600);
   c_HitTime_HitPE->cd();
-  h2_HitTime_HitPe->Draw("colz"); 
+  h2_ExpPe_HitTime->Draw("colz"); 
   c_HitTime_HitPE->Modified(); c_HitTime_HitPE->Update();
 
   TCanvas* c_Ghost= new TCanvas("c_Ghost","c_Ghost",0,0,800,600);
@@ -226,14 +240,13 @@ void buildmu(){
   c_Resid->cd();
   h_Residual->Draw("colz");
   c_Resid->Modified(); c_Resid->Update();
+  
+  TEfficiency* he_Hit_Prob = new TEfficiency(*h_Expected_PeReco,*h_Expected_Pe);
+  TCanvas* c_Hit_Probability = new TCanvas("c_Hit_Probability","c_Hit_Probability",0,0,800,600);
+  c_Hit_Probability->cd();
+  he_Hit_Prob->Draw();
+  c_Hit_Probability->Modified(); c_Hit_Probability->Update();
 
-  // TCanvas* c_Eff_ExpReco = new TCanvas("c_Eff_ExpReco","c_Eff_ExpReco",0,0,800,600);
-  // c_Eff_ExpReco->cd();
-  // he_Ophit_OpDet = new TEfficiency(*h_Reco_Ophit_OpDet,*h_Expected_Ophit_OpDet); 
-  // c_Eff_ExpReco->Modified(); c_Eff_ExpReco->Update();
-  // --- FILE CLOSURE ---------------
-  // ana_file->Close(); visibility_file->Close();
-  // delete ana_file;   delete visibility_file;
   return;
 }
 
