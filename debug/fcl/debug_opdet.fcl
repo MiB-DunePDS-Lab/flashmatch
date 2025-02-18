@@ -1,0 +1,61 @@
+#include "services_dunefd_horizdrift_1x2x6.fcl"
+#include "sspmodules.fcl"
+#include "largeantmodules.fcl"
+#include "opticaldetectormodules_dune.fcl"
+
+process_name: Ana
+
+services:
+{
+  # Load the service that manages root files for histograms.
+  TFileService: { fileName: "test_opdet.root" }
+  TimeTracker:       {}
+  RandomNumberGenerator: {}
+  MemoryTracker:         { } # default is one
+  message:      @local::dune_message_services_prod
+
+  @table::dunefd_1x2x6_simulation_services
+  PhotonVisibilityService: @local::dune10kt_1x2x6_photonvisibilityservice
+}
+
+### Use the 1x2x6 geometry ###
+services.Geometry: @local::dune10kt_1x2x6_refactored_geo
+
+outputs: 
+{
+  out1 : {
+    module_type: RootOutput
+    fileName: "debug_ana.root"
+  }
+}
+
+physics:
+{
+   producers:
+   {
+      opdigi: @local::standard_template_digitizer
+   }
+
+   analyzers: {
+     simphcount: @local::dunefd_simphotoncounter
+     opdigiana: @local::dunefd_opdigiana
+   }
+ 
+   simulate : [ opdigi ]
+   analyzeIt : [simphcount, opdigiana ]
+
+   stream1 : [out1]
+
+   trigger_paths : [simulate]
+
+   end_paths : [analyzeIt, stream1]
+}
+
+physics.producers.opdigi.SSP_LED_AnaTree: true
+physics.analyzers.opdigiana.SSP_LED_AnaTree: true
+physics.analyzers.simphcount.InputModule: "PDFastSim"
+
+
+
+
+
