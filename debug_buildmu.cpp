@@ -24,8 +24,8 @@
 
 
 // --- HARD CODE HERE ----------------
-int nfile_to_analyze = 10;
-size_t n_opdet = 4; // 480
+int nfile_to_analyze = 500;
+size_t n_opdet = 9; // 480
 // size_t n_opdet = 480; // 480
 float light_yield = 27000;
 float arapuca_pde = 0.03;
@@ -122,7 +122,7 @@ void debug_buildmu(){
   // --- LOOP OVER ANA FILES ---------------------------------------------------
   int nfile_analyzed = 0;
   int idx_file = 0;
-  while(nfile_analyzed < nfile_to_analyze && idx_file < 10000){
+  while(nfile_analyzed < nfile_to_analyze && idx_file < 2000){
     // --- ANA STUFF -----------------------------------------------------------
     std::string ana_file_name = std::string(ana_folder_name+base_ana_file_name+idx_file+".root"); 
     std::string debug_file_name = std::string(debug_folder_name+base_debug_file_name+idx_file+".root");
@@ -172,22 +172,27 @@ void debug_buildmu(){
       double exp_ph;
       double exp_ph_min;
 
-      t_DetectedPhotons->GetEntry(entry_debug);
+      t_DetectedPhotons->GetEntry(0);
       std::map<int, int> opdet_detphotons;
-      while(EventID <= idx_event && entry_debug < nEntries_debug){
-        if(EventID == idx_event){
-          opdet_detphotons[OpChannel]++;
-          entry_debug++;
-          t_DetectedPhotons->GetEntry(entry_debug);
-        }
-        if(EventID == 1) std::cout << debug_file_name << " " << opdet_detphotons[OpChannel] << std::endl;
-          
+      for(size_t idx_opdet=0; idx_opdet<n_opdet; idx_opdet++){
+        opdet_detphotons[idx_opdet] = 0;
       }
+      while(EventID <= idx_event+1 && entry_debug < nEntries_debug){
+        if(EventID == idx_event+1 && OpChannel < n_opdet){
+          opdet_detphotons[OpChannel]++;
+        }
+        entry_debug++;
+        t_DetectedPhotons->GetEntry(entry_debug);
+      }
+
+
+      // for(size_t idx_opdet=0; idx_opdet<n_opdet; idx_opdet++){
+      //   std::cout << opdet_detphotons[idx_opdet] << std::endl;
+      // }
       
 
       // --- LOOP OVER OPDETS -------------------------------------------------
       for(size_t idx_opdet=0; idx_opdet<n_opdet; idx_opdet++){
-        h2_exp_true->Fill(opdet_detphotons[idx_opdet], exp_ph);
         
         int idx_bin[3];
         idx_bin[0] = h3VisMap_opDet[idx_opdet]->GetAxis(0)->FindBin(x_true);
@@ -201,6 +206,7 @@ void debug_buildmu(){
         if(exp_ph==0.) exp_ph = exp_ph_min;
         h_Expected_Ophit_OpDet->SetBinContent(idx_opdet, h_Expected_Ophit_OpDet->GetBinContent(idx_opdet)+exp_ph);
         h_Expected_Pe->Fill(exp_ph);
+        if (opdet_detphotons[idx_opdet]>0) h2_exp_true->Fill(opdet_detphotons[idx_opdet], exp_ph);
 
         // --- IF RECONSTRUCTED ------------------------------------------------
         auto it = std::find((*OpHitChannels).begin(), (*OpHitChannels).end(), float(idx_opdet));
@@ -230,6 +236,7 @@ void debug_buildmu(){
       } // end loop over opdets
     } // end loop over tree
     ana_file->Close();
+    debug_file->Close();
   } // end loop over ana files
 
 
