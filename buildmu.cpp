@@ -24,8 +24,9 @@
 
 
 // --- HARD CODE HERE ----------------
-// size_t n_opdet = 8; // 480
-size_t n_opdet = 480; // 480
+int nfile_to_analyze = 10;
+size_t n_opdet = 4; // 480
+// size_t n_opdet = 480; // 480
 float light_yield = 27000;
 float arapuca_pde = 0.03;
 
@@ -38,8 +39,12 @@ double fit_up  = 100.;
 double min_visibility = 1.e-60;
 double hit_threshold = 1.5; // Will integrate Poisson [0, hit_threshold]
 
-TString visibility_file_name = "./olddunevis_fdhd_1x2x6_test_photovisAr.root";
-std::string ana_folder_name = "ana/"; // Folder where the ana files.root
+TString visibility_file_name = "/exp/dune/data/users/dguffant/flash-match/dunevis_fdhd_1x2x6_test_photovisAr.root"; // File with the visibility maps
+std::string ana_folder_name = "/pnfs/dune/scratch/users/fgalizzi/prod_eminus_seed_2000/ana/solar_ana_dune10kt_1x2x6_hist_1.root"; // Folder where the ana files.root
+std::string debug_folder_name = "/pnfs/dune/scratch/users/fgalizzi/prod_eminus_seed_2000/debug/test_opdet_10.root"; // Folder where the debug files.root
+
+std::string base_ana_file_name = "solar_ana_dune10kt_1x2x6_hist_";
+std::string base_debug_file_name = "debug_opdet_";
 // -----------------------------------
 
 void buildmu(){
@@ -111,10 +116,16 @@ void buildmu(){
   // TEfficiency* he_Ophit_OpDet = nullptr;
   
   // --- LOOP OVER ANA FILES ---------------------------------------------------
-  for(const auto &file_name : file_list){
+  for(int i=0; i<nfile_to_analyze; i++){
     // --- ANA STUFF -----------------------------------------------------------
-    std::cout << file_name << std::endl;
-    TFile* ana_file = TFile::Open((ana_folder_name+file_name).c_str(), "READ");
+    TString ana_file_name = ana_folder_name+base_ana_file_name+i+".root"; 
+    TString debug_file_name = debug_folder_name+base_debug_file_name+i+".root";
+    TFile* ana_file = TFile::Open((ana_file_name, "READ");
+    TFile* debug_file = TFile::Open((debug_file_name, "READ");
+    // Check whether both files exist
+    if(!ana_file->IsOpen() || !debug_file->IsOpen()){
+      continue;
+    }
     TDirectory* dir = (TDirectory*)ana_file->Get("solarnuana");
     TTree* tree = (TTree*)(dir->Get("MCTruthTree"));
 
