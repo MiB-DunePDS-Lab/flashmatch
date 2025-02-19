@@ -41,10 +41,13 @@ double hit_threshold = 1.5; // Will integrate Poisson [0, hit_threshold]
 
 TString visibility_file_name = "/exp/dune/data/users/dguffant/flash-match/dunevis_fdhd_1x2x6_test_photovisAr.root"; // File with the visibility maps
 std::string ana_folder_name = "/pnfs/dune/scratch/users/fgalizzi/prod_eminus_seed_2000/ana/"; // Folder where the ana files.root
+std::string debug_folder_name = "/pnfs/dune/scratch/users/fgalizzi/prod_eminus_seed_2000/debug/"; // Folder where the debug files.root
+
 std::string base_ana_file_name = "solar_ana_dune10kt_1x2x6_hist_";
+std::string base_debug_file_name = "test_opdet_";
 // -----------------------------------
 
-void buildmu(){
+void debug_buildmu(){
   gStyle->SetPalette(kSunset);
  
   // --- VISIBILITY STUFF -------------------------------------------------------
@@ -77,6 +80,10 @@ void buildmu(){
 
   TH2D* h2_exp_reco = new TH2D("h2_exp_reco",
                                Form("%s;%s;%s", "", "Reco #Pe", "Expected #Pe"),
+                               800, pe_low, pe_up, 800, pe_low, pe_up);
+
+  TH2D* h2_exp_true = new TH2D("h2_exp_true",
+                               Form("%s;%s;%s", "", "True #Pe", "Expected #Pe"),
                                800, pe_low, pe_up, 800, pe_low, pe_up);
 
   TH2D* h2_exp_reco_large = new TH2D("h2_exp_reco_large",
@@ -118,12 +125,14 @@ void buildmu(){
   while(nfile_analyzed < nfile_to_analyze && idx_file < 10000){
     // --- ANA STUFF -----------------------------------------------------------
     std::string ana_file_name = std::string(ana_folder_name+base_ana_file_name+idx_file+".root"); 
-    // Check whether file exists
+    std::string debug_file_name = std::string(debug_folder_name+base_debug_file_name+idx_file+".root");
+    // Check whether both files exist
     idx_file++;
-    if(!std::filesystem::exists(ana_file_name)){
+    if(!std::filesystem::exists(ana_file_name) || !std::filesystem::exists(debug_file_name)){
       continue;
     }
     nfile_analyzed++;
+    std::cout << ana_file_name << std::endl;
 
     TFile* ana_file = TFile::Open(ana_file_name.c_str(), "READ");
     TDirectory* dir = (TDirectory*)ana_file->Get("solarnuana");
@@ -145,20 +154,41 @@ void buildmu(){
     tree->SetBranchAddress("OpHitChannel", &OpHitChannels);
     tree->SetBranchAddress("OpHitTime", &OpHitTimes);
   
+    // Debug stuff
     TFile* debug_file = TFile::Open(debug_file_name.c_str(), "READ");
     TDirectory* dir_debug = (TDirectory*)debug_file->Get("simphcount");
     TTree* t_DetectedPhotons = (TTree*)(dir_debug->Get("DetectedPhotons"));
+    int EventID, OpChannel;
+    t_DetectedPhotons->SetBranchAddress("EventID", &EventID);
+    t_DetectedPhotons->SetBranchAddress("OpChannel", &OpChannel);
 
 
     // --- LOOP OVER TREE -----------------------------------------------------
     Long64_t nEntries = tree->GetEntries();
-    for (Long64_t idx_entry = 0; idx_entry < nEntries; ++idx_entry) {
-      tree->GetEntry(idx_entry);
+    Long64_t nEntries_debug = t_DetectedPhotons->GetEntries();
+    Long64_t entry_debug = 0;
+    for (Long64_t idx_event = 0; idx_event < nEntries; ++idx_event) {
+      tree->GetEntry(idx_event);
       double exp_ph;
       double exp_ph_min;
 
+      t_DetectedPhotons->GetEntry(entry_debug);
+      std::map<int, int> opdet_detphotons;
+      while(EventID <= idx_event && entry_debug < nEntries_debug){
+        if(EventID == idx_event){
+          opdet_detphotons[OpChannel]++;
+          entry_debug++;
+          t_DetectedPhotons->GetEntry(entry_debug);
+        }
+        if(EventID == 1) std::cout << debug_file_name << " " << opdet_detphotons[OpChannel] << std::endl;
+          
+      }
+      
+
       // --- LOOP OVER OPDETS -------------------------------------------------
       for(size_t idx_opdet=0; idx_opdet<n_opdet; idx_opdet++){
+        h2_exp_true->Fill(opdet_detphotons[idx_opdet], exp_ph);
+        
         int idx_bin[3];
         idx_bin[0] = h3VisMap_opDet[idx_opdet]->GetAxis(0)->FindBin(x_true);
         idx_bin[1] = h3VisMap_opDet[idx_opdet]->GetAxis(1)->FindBin(y_true);
@@ -209,6 +239,10 @@ void buildmu(){
   TF1* f1 = new TF1("f1", "pol1", fit_low, fit_up);
   h_Expected_PeReco_Prof->Fit("f1", "R");
 
+  TProfile* h_Expected_PeTrue_Prof = h2_exp_true->ProfileX();
+  TF1* f2 = new TF1("f2", "pol1", fit_low, fit_up);
+  h_Expected_PeTrue_Prof->Fit("f2", "R");
+
   TEfficiency* he_Hit_Prob = new TEfficiency(*h_Expected_PeReco,*h_Expected_Pe);
   he_Hit_Prob->SetTitle("Hit Probability;Expected #Pe;Detection Probability");
   
@@ -224,7 +258,9 @@ void buildmu(){
   he_Hit_Prob->Write();
   h_Expected_PeReco->Write();
   h2_exp_reco->Write();
+  h2_exp_true->Write();
   h_Expected_PeReco_Prof->Write();
+  h_Expected_PeTrue_Prof->Write();
   h2_ExpPe_HitTime->Write();
   out_file->Close();
 
