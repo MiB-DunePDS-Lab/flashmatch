@@ -1,4 +1,5 @@
 #include "Rtypes.h"
+#include "RtypesCore.h"
 #include "THnBase.h"
 #include "TProfile.h"
 #include "TString.h"
@@ -12,6 +13,8 @@
 #include <TArrayF.h>
 #include <TEfficiency.h>
 #include <TStyle.h>
+#include <TPRegexp.h>
+#include <TObjString.h>
 
 #include <cmath>
 #include <cstddef>
@@ -38,11 +41,36 @@ double fit_up  = 100.;
 double min_visibility = 1.e-60;
 double hit_threshold = 1.5; // Will integrate Poisson [0, hit_threshold]
 
-TString visibility_file_name = "./olddunevis_fdhd_1x2x6_test_photovisAr.root";
-std::string ana_folder_name = "ana/"; // Folder where the ana files.root
+TString visibility_file_name = "/exp/dune/data/users/dguffant/flash-match/dunevis_fdhd_1x2x6_test_photovisAr_rebin222.root"; 
+std::string ana_folder_name = "/exp/dune/data/users/fgalizzi/prod_eminus/ana/";
 // -----------------------------------
 
-void buildmu(){
+// --- HELPER FUNCTIONS --------------
+std::vector<int> findIndices(const std::vector<float>& vec, const float& target) {
+  std::vector<int> indices;
+  for (size_t i = 0; i < vec.size(); ++i) {
+    if (vec[i] == target) {
+      indices.push_back(i);
+    }
+  }
+  return indices;
+}
+
+int getRootfileNumber(const std::string& filename) {
+  TPRegexp re("_([0-9]+)\\.root$");
+  TObjArray* matches = re.MatchS(filename);
+
+  if (matches->GetEntries() > 1) {
+    TString numStr = ((TObjString*)matches->At(1))->GetString();
+    delete matches;
+    return numStr.Atoi();
+  }
+
+  delete matches;
+  return -1;
+}
+
+void buildmu(const TString output_file_path){
   gStyle->SetPalette(kSunset);
  
   // --- VISIBILITY STUFF -------------------------------------------------------
@@ -50,10 +78,25 @@ void buildmu(){
   // Get the pointer for each opdet
   THnSparseT<TArrayF>* h3VisMap_opDet[n_opdet];
   for(int idx_opdet=0; idx_opdet<n_opdet; idx_opdet++){
-    TString name_h3_opdet = "h3VisMap_opDet"+std::to_string(idx_opdet);
+    TString name_h3_opdet = "h3VisMap_opDet"+std::to_string(idx_opdet)+"_2_2_2";
     visibility_file->GetObject(name_h3_opdet, h3VisMap_opDet[idx_opdet]);
   }
 
+  // --- OUTPUT FILE -----------------------------------------------------------
+  TFile* out_file = TFile::Open(output_file_path, "RECREATE");
+  Int_t ifile = 0; 
+  Int_t iev = 0; 
+  Int_t iopdet = 0;
+  Double_t mu = 0.0; 
+  Double_t reco_pe = 0.0; 
+  Double_t hit_t = 0.0; 
+  TTree* out_tree = new TTree("t", "summary tree"); 
+  out_tree->Branch("ifile", &ifile); 
+  out_tree->Branch("ievent", &iev); 
+  out_tree->Branch("iopdet", &iopdet); 
+  out_tree->Branch("mu", &mu); 
+  out_tree->Branch("reco_pe", &reco_pe); 
+  out_tree->Branch("hit_t", &hit_t); 
   
 
   // --- HISTOS ----------------------------------------------------------------
@@ -111,10 +154,17 @@ void buildmu(){
   // TEfficiency* he_Ophit_OpDet = nullptr;
   
   // --- LOOP OVER ANA FILES ---------------------------------------------------
-  for(const auto &file_name : file_list){
+  for(const auto &file_name : file_list) {
     // --- ANA STUFF -----------------------------------------------------------
-    std::cout << file_name << std::endl;
+    ifile = getRootfileNumber( file_name ); 
+    std::cout << file_name << " [" << ifile << "]" << std::endl;
     TFile* ana_file = TFile::Open((ana_folder_name+file_name).c_str(), "READ");
+    if (ana_file == nullptr) {
+      printf("ERROR: Cannot open file %s/%s\n", 
+          ana_folder_name.data(), file_name.data()); 
+      ifile++; 
+      continue;
+    }
     TDirectory* dir = (TDirectory*)ana_file->Get("solarnuana");
     TTree* tree = (TTree*)(dir->Get("MCTruthTree"));
 
@@ -135,41 +185,36 @@ void buildmu(){
     // --- LOOP OVER TREE -----------------------------------------------------
     Long64_t nEntries = tree->GetEntries();
     for (Long64_t idx_entry = 0; idx_entry < nEntries; ++idx_entry) {
+      iev = idx_entry; 
       tree->GetEntry(idx_entry);
       double exp_ph;
       double exp_ph_min;
 
       // --- LOOP OVER OPDETS -------------------------------------------------
       for(size_t idx_opdet=0; idx_opdet<n_opdet; idx_opdet++){
+        iopdet = idx_opdet;
+        mu = 0.0; 
+        reco_pe = 0.0; 
+        hit_t = 0.0; 
+
         int idx_bin[3];
         idx_bin[0] = h3VisMap_opDet[idx_opdet]->GetAxis(0)->FindBin(x_true);
         idx_bin[1] = h3VisMap_opDet[idx_opdet]->GetAxis(1)->FindBin(y_true);
         idx_bin[2] = h3VisMap_opDet[idx_opdet]->GetAxis(2)->FindBin(z_true);
         double voxel_vis = h3VisMap_opDet[idx_opdet]->GetBinContent(idx_bin);
         
-
         exp_ph = E_true*light_yield*voxel_vis*arapuca_pde;
         exp_ph_min = E_true*light_yield*min_visibility*arapuca_pde;
         if(exp_ph==0.) exp_ph = exp_ph_min;
+          
+        mu = exp_ph;
+
         h_Expected_Ophit_OpDet->SetBinContent(idx_opdet, h_Expected_Ophit_OpDet->GetBinContent(idx_opdet)+exp_ph);
         h_Expected_Pe->Fill(exp_ph);
 
         // --- IF RECONSTRUCTED ------------------------------------------------
-        auto it = std::find((*OpHitChannels).begin(), (*OpHitChannels).end(), float(idx_opdet));
-        size_t idx_hit = std::distance((*OpHitChannels).begin(), it);
-        if(idx_hit != (*OpHitChannels).size()){ 
-          h2_exp_reco->Fill((*OpHitPes)[idx_hit], exp_ph);
-          h2_exp_reco_large->Fill((*OpHitPes)[idx_hit], exp_ph);
-          h2_ExpPe_HitTime->Fill((*OpHitTimes)[idx_hit], exp_ph);
-          h_Expected_PeReco->Fill(exp_ph);
-          h_Reco_Ophit_OpDet->SetBinContent(idx_opdet, h_Reco_Ophit_OpDet->GetBinContent(idx_opdet)+exp_ph);
-          h_Residual->Fill(((((*OpHitPes)[idx_hit])-exp_ph)/exp_ph)*100, exp_ph); 
-          if(exp_ph == exp_ph_min && (*OpHitPes)[idx_hit] > 0.0 ){    //true==0, ophit>0 per opdet??
-            h_Ghost->Fill(exp_ph, (*OpHitPes)[idx_hit]); 
-          } //Ghost PE 
-        } // reconstructed
-        // --- IF NOT RECONSTRUCTED --------------------------------------------
-        else {
+        const auto matches = findIndices( *OpHitChannels, float(idx_opdet) ); 
+        if ( matches.empty() ) {
           h2_exp_reco->Fill(0., exp_ph);
           h2_exp_reco_large->Fill(0., exp_ph);
           if (exp_ph > 5.){
@@ -178,10 +223,33 @@ void buildmu(){
             hfail_Ytrue_OpDet->Fill(idx_opdet, y_true);
             hfail_Ztrue_OpDet->Fill(idx_opdet, z_true);
           }
-        } // not reconstructed
+        }
+        else {
+          for (const auto& idx_hit : matches) {
+            reco_pe += (*OpHitPes).at(idx_hit);
+            if (idx_hit == matches.front()) {
+              hit_t = (*OpHitTimes).at(idx_hit);
+            }
+          }
+
+          h2_exp_reco->Fill(reco_pe, exp_ph);
+          h2_exp_reco_large->Fill(reco_pe, exp_ph);
+          h2_ExpPe_HitTime->Fill(hit_t, exp_ph);
+          h_Expected_PeReco->Fill(exp_ph);
+          h_Reco_Ophit_OpDet->SetBinContent(
+              idx_opdet, h_Reco_Ophit_OpDet->GetBinContent(idx_opdet)+exp_ph);
+          h_Residual->Fill( (reco_pe/exp_ph)*100, exp_ph); 
+          if(exp_ph == exp_ph_min && reco_pe> 0.0 ){    //true==0, ophit>0 per opdet??
+            h_Ghost->Fill(exp_ph, reco_pe); 
+          } //Ghost PE 
+        }
+
+        out_tree->Fill(); 
       } // end loop over opdets
     } // end loop over tree
     ana_file->Close();
+
+    ifile++; 
   } // end loop over ana files
 
 
@@ -194,23 +262,6 @@ void buildmu(){
   TEfficiency* he_Hit_Prob = new TEfficiency(*h_Expected_PeReco,*h_Expected_Pe);
   he_Hit_Prob->SetTitle("Hit Probability;Expected #Pe;Detection Probability");
   
-  // --- SAVE -------------------------------------------------------------------
-  TFile* out_file = TFile::Open("out_buildmu.root", "RECREATE");
-  hfail_Etrue_OpDet->Write();
-  hfail_Xtrue_OpDet->Write();
-  hfail_Ytrue_OpDet->Write();
-  hfail_Ztrue_OpDet->Write();
-  h_Expected_Ophit_OpDet->Write();
-  h_Reco_Ophit_OpDet->Write();
-  h_Expected_Pe->Write();
-  he_Hit_Prob->Write();
-  h_Expected_PeReco->Write();
-  h2_exp_reco->Write();
-  h_Expected_PeReco_Prof->Write();
-  h2_ExpPe_HitTime->Write();
-  out_file->Close();
-
-
 
   // --- PLOTTING ----------------------------------------------------------------
   TCanvas* cfail_Etrue_Opdet = new TCanvas("cfail_Etrue_Opdet","cfail_Etrue_Opdet",0,0,800,600);
@@ -264,6 +315,25 @@ void buildmu(){
   c_Hit_Probability->cd();
   he_Hit_Prob->Draw();
   c_Hit_Probability->Modified(); c_Hit_Probability->Update();
+  
+  // --- SAVE -------------------------------------------------------------------
+  out_file->cd(); 
+  out_tree->Write(); 
+  hfail_Etrue_OpDet->Write();
+  hfail_Xtrue_OpDet->Write();
+  hfail_Ytrue_OpDet->Write();
+  hfail_Ztrue_OpDet->Write();
+  h_Expected_Ophit_OpDet->Write();
+  h_Reco_Ophit_OpDet->Write();
+  h_Expected_Pe->Write();
+  he_Hit_Prob->Write();
+  h_Expected_PeReco->Write();
+  h2_exp_reco->Write();
+  h_Expected_PeReco_Prof->Write();
+  h2_ExpPe_HitTime->Write();
+  out_file->Close();
+
+
 
   return;
 }
