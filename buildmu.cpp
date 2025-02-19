@@ -1,5 +1,6 @@
 #include "Rtypes.h"
 #include "THnBase.h"
+#include "TProfile.h"
 #include "TString.h"
 #include <TFile.h>
 #include <TF1.h>
@@ -10,6 +11,7 @@
 #include <THnSparse.h>
 #include <TArrayF.h>
 #include <TEfficiency.h>
+#include <TStyle.h>
 
 #include <cmath>
 #include <cstddef>
@@ -27,10 +29,16 @@ size_t n_opdet = 480; // 480
 float light_yield = 27000;
 float arapuca_pde = 0.03;
 
+double pe_low = 0.;
+double pe_up  = 300.;
+
+double fit_low = 11.;
+double fit_up  = 100.;
+
 double min_visibility = 1.e-60;
 double hit_threshold = 1.5; // Will integrate Poisson [0, hit_threshold]
 
-TString visibility_file_name = "./dunevis_fdhd_1x2x6_test_photovisAr.root";
+TString visibility_file_name = "./olddunevis_fdhd_1x2x6_test_photovisAr.root";
 std::string ana_folder_name = "ana/"; // Folder where the ana files.root
 // -----------------------------------
 
@@ -44,7 +52,6 @@ void buildmu(){
   for(int idx_opdet=0; idx_opdet<n_opdet; idx_opdet++){
     TString name_h3_opdet = "h3VisMap_opDet"+std::to_string(idx_opdet);
     visibility_file->GetObject(name_h3_opdet, h3VisMap_opDet[idx_opdet]);
-    // h3VisMap_opDet[idx_opdet] = rebin_visibility_map(h3VisMap_opDet[idx_opdet], 5, 5, 5);
   }
 
   
@@ -53,33 +60,39 @@ void buildmu(){
   TH1D* h_Expected_Ophit_OpDet = new TH1D("h_Expected_Ophit_OpDet",
                                           Form("%s;%s;%s","h_Expected_Ophit_OpDet","OpDet","OpHit"),
                                           n_opdet, 0., double(n_opdet));
-  TH1D* h_Reco_Ophit_OpDet = new TH1D("h_Reco_Ophit_OpDet",
+  TH1D* h_Reco_Ophit_OpDet     = new TH1D("h_Reco_Ophit_OpDet",
                                           Form("%s;%s;%s","h_Reco_Ophit_OpDet","OpDet","OpHit"),
                                           n_opdet, 0., double(n_opdet));
   h_Reco_Ophit_OpDet->SetLineColor(kRed);
 
   TH1D* h_Expected_Pe = new TH1D("h_Expected_Pe",
-                                 Form("%s;%s;%s","h_Expected_Pe","PE","Detection Probability"),
-                                 300, 0., 200.);
+                                 Form("%s;%s;%s","h_Expected_Pe","Expected #Pe","Counts"),
+                                 300, pe_low, pe_up);
   
   TH1D* h_Expected_PeReco = new TH1D("h_Expected_PeReco",
-                                     Form("%s;%s;%s","h_Expected_PeReco","x","y"),
-                                     300, 0., 200.);
+                                     Form("%s;%s;%s","h_Expected_PeReco","Expected #Pe", "Counts"),
+                                     300, pe_low, pe_up);
 
-  TH2D* h2_exp_reco = new TH2D("h2_exp_reco", Form("%s;%s;%s", "", "Reco #Pe", "Expected #Pe"), 800, 0., 200., 800, 0, 200);
+  TH2D* h2_exp_reco = new TH2D("h2_exp_reco",
+                               Form("%s;%s;%s", "", "Reco #Pe", "Expected #Pe"),
+                               800, pe_low, pe_up, 800, pe_low, pe_up);
+
+  TH2D* h2_exp_reco_large = new TH2D("h2_exp_reco_large",
+                               Form("%s;%s;%s", "", "Reco #Pe", "Expected #Pe"),
+                               800*3, pe_low, pe_up*3, 800*3, pe_low, pe_up*3);
 
   TH2D* h2_ExpPe_HitTime = new TH2D("h2_HitPe_HitTime", Form("%s;%s;%s", "", "HitTime [ticks]", "Expected #Pe"),
                                     200, -1.5, 4.5,
-                                    200, 0, 200.);
+                                    200, pe_low, pe_up);
 
   // TH2D for events where expected_photons > 5 and no detection
-  TH2D* hfail_Etrue_OpDet = new TH2D("hfail_Etrue_OpDet",Form("%s;%s;%s","hfail_Etrue_OpDet","OpDet","Etrue"),
+  TH2D* hfail_Etrue_OpDet = new TH2D("hfail_Etrue_OpDet",Form("%s;%s;%s","hfail_Etrue_OpDet","OpDet","E_{True} [MeV]"),
                                      n_opdet, 0., double(n_opdet),
-                                     90, 0., 20.);
+                                     90, 10., 30.);
 
-  TH2D* hfail_Xtrue_OpDet = new TH2D("hfail_Xtrue_OpDet",Form("%s;%s;%s","hfail_Xtrue_OpDet","OpDet","Xtrue"),
+  TH2D* hfail_Xtrue_OpDet = new TH2D("hfail_Xtrue_OpDet",Form("%s;%s;%s","hfail_Xtrue_OpDet","OpDet","X_{True} [cm]"),
                                      n_opdet, 0., double(n_opdet),
-                                     90, -400., 400.);
+                                     90, -0., 400.);
 
   TH2D* hfail_Ytrue_OpDet = new TH2D("hfail_Ytrue_OpDet",Form("%s;%s;%s","hfail_Ytrue_OpDet","OpDet","Ytrue"),
                                      n_opdet, 0., double(n_opdet),
@@ -89,11 +102,11 @@ void buildmu(){
                                      n_opdet, 0., double(n_opdet),
                                      90, 0., 1400.);
   
-  TH2D* h_Ghost = new TH2D("h_Ghost",Form("%s;%s;%s", "Reco_Ghost", "Event", "Reco_Ghost") 
-                           , 100, 0, 100, 100, 0, 100); //Ghost PE-> Photons we need ignoring.
+  TH2D* h_Ghost = new TH2D("h_Ghost",Form("%s;%s;%s", "Reco_Ghost", "Event", "Reco_Ghost"), 
+                           100, 0, 100, 100, 0, 100); //Ghost PE-> Photons we need ignoring.
   
-  TH2D* h_Residual = new TH2D("h_Residual",Form("%s;%s;%s", "", "Reco-True/True", "True") 
-                              , 100, -1000, 1000, 100, 0, 1000);  //*100
+  TH2D* h_Residual = new TH2D("h_Residual",Form("%s;%s;%s", "", "Reco-True/True", "True"),
+                              100, -1000, 1000, 100, 0, 1000);  //*100
 
   // TEfficiency* he_Ophit_OpDet = nullptr;
   
@@ -138,60 +151,65 @@ void buildmu(){
         exp_ph = E_true*light_yield*voxel_vis*arapuca_pde;
         exp_ph_min = E_true*light_yield*min_visibility*arapuca_pde;
         if(exp_ph==0.) exp_ph = exp_ph_min;
-        h_Expected_Ophit_OpDet->Fill(idx_opdet, exp_ph);
+        h_Expected_Ophit_OpDet->SetBinContent(idx_opdet, h_Expected_Ophit_OpDet->GetBinContent(idx_opdet)+exp_ph);
         h_Expected_Pe->Fill(exp_ph);
 
-
+        // --- IF RECONSTRUCTED ------------------------------------------------
         auto it = std::find((*OpHitChannels).begin(), (*OpHitChannels).end(), float(idx_opdet));
         size_t idx_hit = std::distance((*OpHitChannels).begin(), it);
         if(idx_hit != (*OpHitChannels).size()){ 
           h2_exp_reco->Fill((*OpHitPes)[idx_hit], exp_ph);
+          h2_exp_reco_large->Fill((*OpHitPes)[idx_hit], exp_ph);
           h2_ExpPe_HitTime->Fill((*OpHitTimes)[idx_hit], exp_ph);
           h_Expected_PeReco->Fill(exp_ph);
-
-          //--------Residual --------------------
-          //if (exp_ph > exp_ph_min){
-                h_Residual->Fill(((((*OpHitPes)[idx_hit])-exp_ph)/exp_ph)*100, exp_ph); 
-             // }
-         
-          //------Found the Ghost PE-------
-           if(exp_ph == exp_ph_min && (*OpHitPes)[idx_hit] > 0.0 ){    //true==0, ophit>0 per opdet??
-              h_Ghost->Fill(exp_ph, (*OpHitPes)[idx_hit]); 
-              //std::cout << "event_true" << event_true << "--"<<(*OpHitPes)[idx_hit] << std::endl;
-             } //Ghost PE
-               
-        } else {
+          h_Reco_Ophit_OpDet->SetBinContent(idx_opdet, h_Reco_Ophit_OpDet->GetBinContent(idx_opdet)+exp_ph);
+          h_Residual->Fill(((((*OpHitPes)[idx_hit])-exp_ph)/exp_ph)*100, exp_ph); 
+          if(exp_ph == exp_ph_min && (*OpHitPes)[idx_hit] > 0.0 ){    //true==0, ophit>0 per opdet??
+            h_Ghost->Fill(exp_ph, (*OpHitPes)[idx_hit]); 
+          } //Ghost PE 
+        } // reconstructed
+        // --- IF NOT RECONSTRUCTED --------------------------------------------
+        else {
           h2_exp_reco->Fill(0., exp_ph);
+          h2_exp_reco_large->Fill(0., exp_ph);
           if (exp_ph > 5.){
-            // std::cout << idx_entry << "\t" << idx_opdet << "\t" << E_true << "\t" << x_true << "\t" <<
-            //   y_true << "\t" << z_true << "\t" << std::endl;
             hfail_Etrue_OpDet->Fill(idx_opdet, E_true);
             hfail_Xtrue_OpDet->Fill(idx_opdet, x_true);
             hfail_Ytrue_OpDet->Fill(idx_opdet, y_true);
             hfail_Ztrue_OpDet->Fill(idx_opdet, z_true);
           }
-        }
+        } // not reconstructed
       } // end loop over opdets
-     
-      for(size_t idx_hit=0; idx_hit<(*OpHitChannels).size(); idx_hit++){
-        h_Reco_Ophit_OpDet->Fill((*OpHitChannels)[idx_hit], (*OpHitPes)[idx_hit]);
-      } 
     } // end loop over tree
-
     ana_file->Close();
   } // end loop over ana files
 
 
+  // --- EXTRA PLOTS -----------------------------------------------------------
+  TProfile* h_Expected_PeReco_Prof = h2_exp_reco_large->ProfileX();
+  h2_exp_reco_large->Delete();
+  TF1* f1 = new TF1("f1", "pol1", fit_low, fit_up);
+  h_Expected_PeReco_Prof->Fit("f1", "R");
 
+  TEfficiency* he_Hit_Prob = new TEfficiency(*h_Expected_PeReco,*h_Expected_Pe);
+  he_Hit_Prob->SetTitle("Hit Probability;Expected #Pe;Detection Probability");
+  
   // --- SAVE -------------------------------------------------------------------
-  TFile* out_file = TFile::Open("h2_exp_reco.root", "RECREATE");
+  TFile* out_file = TFile::Open("out_buildmu.root", "RECREATE");
+  hfail_Etrue_OpDet->Write();
+  hfail_Xtrue_OpDet->Write();
+  hfail_Ytrue_OpDet->Write();
+  hfail_Ztrue_OpDet->Write();
+  h_Expected_Ophit_OpDet->Write();
+  h_Reco_Ophit_OpDet->Write();
+  h_Expected_Pe->Write();
+  he_Hit_Prob->Write();
+  h_Expected_PeReco->Write();
   h2_exp_reco->Write();
+  h_Expected_PeReco_Prof->Write();
+  h2_ExpPe_HitTime->Write();
   out_file->Close();
 
-  TFile* out_file2 = TFile::Open("h2_ExpPe_HitTime.root", "RECREATE");
-  h2_ExpPe_HitTime->Write();
-  out_file2->Close();
-  
 
 
   // --- PLOTTING ----------------------------------------------------------------
@@ -224,6 +242,7 @@ void buildmu(){
   TCanvas* c_Mu_Pe = new TCanvas("c_Mu_Pe ","c_Mu_Pe ",0,0,800,600);
   c_Mu_Pe ->cd();
   h2_exp_reco->Draw("colz");
+  f1->Draw("same");
   c_Mu_Pe ->Modified(); c_Mu_Pe ->Update();
 
   TCanvas* c_HitTime_HitPE = new TCanvas("c_HitTime_HitPE","c_HitTime_HitPE",0,0,800,600);
@@ -241,7 +260,6 @@ void buildmu(){
   h_Residual->Draw("colz");
   c_Resid->Modified(); c_Resid->Update();
   
-  TEfficiency* he_Hit_Prob = new TEfficiency(*h_Expected_PeReco,*h_Expected_Pe);
   TCanvas* c_Hit_Probability = new TCanvas("c_Hit_Probability","c_Hit_Probability",0,0,800,600);
   c_Hit_Probability->cd();
   he_Hit_Prob->Draw();
@@ -249,4 +267,3 @@ void buildmu(){
 
   return;
 }
-
