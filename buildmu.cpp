@@ -29,7 +29,7 @@
 // --- HARD CODE HERE ----------------
 // size_t n_opdet = 8; // 480
 size_t n_opdet = 480; // 480
-float light_yield = 27000;
+float light_yield = 20000;
 float arapuca_pde = 0.03;
 
 double pe_low = 0.;
@@ -264,57 +264,57 @@ void buildmu(const TString output_file_path){
   
 
   // --- PLOTTING ----------------------------------------------------------------
-  TCanvas* cfail_Etrue_Opdet = new TCanvas("cfail_Etrue_Opdet","cfail_Etrue_Opdet",0,0,800,600);
-  cfail_Etrue_Opdet->cd();
-  hfail_Etrue_OpDet->Draw("colz");
-  cfail_Etrue_Opdet->Modified(); cfail_Etrue_Opdet->Update();
+  //TCanvas* cfail_Etrue_Opdet = new TCanvas("cfail_Etrue_Opdet","cfail_Etrue_Opdet",0,0,800,600);
+  //cfail_Etrue_Opdet->cd();
+  //hfail_Etrue_OpDet->Draw("colz");
+  //cfail_Etrue_Opdet->Modified(); cfail_Etrue_Opdet->Update();
 
-  TCanvas* cfail_Xtrue_Opdet = new TCanvas("cfail_Xtrue_Opdet","cfail_Xtrue_Opdet",0,0,800,600);
-  cfail_Xtrue_Opdet->cd();
-  hfail_Xtrue_OpDet->Draw("colz");
-  cfail_Xtrue_Opdet->Modified(); cfail_Xtrue_Opdet->Update();
+  //TCanvas* cfail_Xtrue_Opdet = new TCanvas("cfail_Xtrue_Opdet","cfail_Xtrue_Opdet",0,0,800,600);
+  //cfail_Xtrue_Opdet->cd();
+  //hfail_Xtrue_OpDet->Draw("colz");
+  //cfail_Xtrue_Opdet->Modified(); cfail_Xtrue_Opdet->Update();
 
-  TCanvas* cfail_Ytrue_Opdet = new TCanvas("cfail_Ytrue_Opdet","cfail_Ytrue_Opdet",0,0,800,600);
-  cfail_Ytrue_Opdet->cd();
-  hfail_Ytrue_OpDet->Draw("colz");
-  cfail_Ytrue_Opdet->Modified(); cfail_Ytrue_Opdet->Update();
+  //TCanvas* cfail_Ytrue_Opdet = new TCanvas("cfail_Ytrue_Opdet","cfail_Ytrue_Opdet",0,0,800,600);
+  //cfail_Ytrue_Opdet->cd();
+  //hfail_Ytrue_OpDet->Draw("colz");
+  //cfail_Ytrue_Opdet->Modified(); cfail_Ytrue_Opdet->Update();
 
-  TCanvas* cfail_Ztrue_Opdet = new TCanvas("cfail_Ztrue_Opdet","cfail_Ztrue_Opdet",0,0,800,600);
-  cfail_Ztrue_Opdet->cd();
-  hfail_Ztrue_OpDet->Draw("colz");
-  cfail_Ztrue_Opdet->Modified(); cfail_Ztrue_Opdet->Update();
+  //TCanvas* cfail_Ztrue_Opdet = new TCanvas("cfail_Ztrue_Opdet","cfail_Ztrue_Opdet",0,0,800,600);
+  //cfail_Ztrue_Opdet->cd();
+  //hfail_Ztrue_OpDet->Draw("colz");
+  //cfail_Ztrue_Opdet->Modified(); cfail_Ztrue_Opdet->Update();
 
-  TCanvas* c_Ophit_OpDet= new TCanvas("c_Ophit_OpDet","c_Ophit_OpDet",0,0,800,600);
-  c_Ophit_OpDet->cd();
-  h_Expected_Ophit_OpDet->Draw();
-  h_Reco_Ophit_OpDet->Draw("same");
-  c_Ophit_OpDet->Modified(); c_Ophit_OpDet->Update();
+  //TCanvas* c_Ophit_OpDet= new TCanvas("c_Ophit_OpDet","c_Ophit_OpDet",0,0,800,600);
+  //c_Ophit_OpDet->cd();
+  //h_Expected_Ophit_OpDet->Draw();
+  //h_Reco_Ophit_OpDet->Draw("same");
+  //c_Ophit_OpDet->Modified(); c_Ophit_OpDet->Update();
 
-  TCanvas* c_Mu_Pe = new TCanvas("c_Mu_Pe ","c_Mu_Pe ",0,0,800,600);
-  c_Mu_Pe ->cd();
-  h2_exp_reco->Draw("colz");
-  f1->Draw("same");
-  c_Mu_Pe ->Modified(); c_Mu_Pe ->Update();
+  //TCanvas* c_Mu_Pe = new TCanvas("c_Mu_Pe ","c_Mu_Pe ",0,0,800,600);
+  //c_Mu_Pe ->cd();
+  //h2_exp_reco->Draw("colz");
+  //f1->Draw("same");
+  //c_Mu_Pe ->Modified(); c_Mu_Pe ->Update();
 
-  TCanvas* c_HitTime_HitPE = new TCanvas("c_HitTime_HitPE","c_HitTime_HitPE",0,0,800,600);
-  c_HitTime_HitPE->cd();
-  h2_ExpPe_HitTime->Draw("colz"); 
-  c_HitTime_HitPE->Modified(); c_HitTime_HitPE->Update();
+  //TCanvas* c_HitTime_HitPE = new TCanvas("c_HitTime_HitPE","c_HitTime_HitPE",0,0,800,600);
+  //c_HitTime_HitPE->cd();
+  //h2_ExpPe_HitTime->Draw("colz"); 
+  //c_HitTime_HitPE->Modified(); c_HitTime_HitPE->Update();
 
-  TCanvas* c_Ghost= new TCanvas("c_Ghost","c_Ghost",0,0,800,600);
-  c_Ghost->cd();
-  h_Ghost->Draw("colz");
-  c_Ghost->Modified(); c_Ghost->Update();
+  //TCanvas* c_Ghost= new TCanvas("c_Ghost","c_Ghost",0,0,800,600);
+  //c_Ghost->cd();
+  //h_Ghost->Draw("colz");
+  //c_Ghost->Modified(); c_Ghost->Update();
 
-  TCanvas* c_Resid= new TCanvas("c_Resid","c_Resid",0,0,800,600);
-  c_Resid->cd();
-  h_Residual->Draw("colz");
-  c_Resid->Modified(); c_Resid->Update();
+  //TCanvas* c_Resid= new TCanvas("c_Resid","c_Resid",0,0,800,600);
+  //c_Resid->cd();
+  //h_Residual->Draw("colz");
+  //c_Resid->Modified(); c_Resid->Update();
   
-  TCanvas* c_Hit_Probability = new TCanvas("c_Hit_Probability","c_Hit_Probability",0,0,800,600);
-  c_Hit_Probability->cd();
-  he_Hit_Prob->Draw();
-  c_Hit_Probability->Modified(); c_Hit_Probability->Update();
+  //TCanvas* c_Hit_Probability = new TCanvas("c_Hit_Probability","c_Hit_Probability",0,0,800,600);
+  //c_Hit_Probability->cd();
+  //he_Hit_Prob->Draw();
+  //c_Hit_Probability->Modified(); c_Hit_Probability->Update();
   
   // --- SAVE -------------------------------------------------------------------
   out_file->cd(); 
