@@ -1,0 +1,16 @@
+#include "standard_detsim_dune10kt.fcl"
+
+services: 
+{
+    @table::services
+    @table::dunefd_1x2x6_simulation_services
+}
+
+physics.producers: 
+{
+    @table::physics.producers
+    tpcrawdecoder: @local::dunefd_horizdrift_1x2x6_sim_nfsp
+}
+
+physics.producers.opdigi.DarkNoiseRate: 0.0
+physics.producers.opdigi.CrossTalk: 0.0
