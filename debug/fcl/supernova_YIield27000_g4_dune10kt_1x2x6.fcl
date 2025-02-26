@@ -1,0 +1,11 @@
+#include "standard_g4_dune10kt_1x2x6.fcl"
+
+process_name: SupernovaG4
+
+dunefd_properties:      @local::standard_properties
+services.PhysicsList:   @local::dune_physics_list_supernova
+
+outputs.out1.outputCommands: ["keep *", "drop sim::SimEnergyDeposits_largeant_*_*G4*"]
+
+dunefd_properties.ElectronScintYield: 27000
+dunefd_properties.ElectronScintYieldRatio: 2.7e-1
