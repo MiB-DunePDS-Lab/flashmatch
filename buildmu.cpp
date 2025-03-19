@@ -9,6 +9,7 @@
 #include <TH2D.h>
 #include <TTree.h>
 #include <THnSparse.h>
+#include <TTreeReader.h>
 #include <TArrayF.h>
 #include <TEfficiency.h>
 #include <TStyle.h>
@@ -17,17 +18,21 @@
 #include <cstddef>
 #include <iostream>
 #include <string>
+#include <filesystem>  // C++17
 #include <vector>
 
 #include "DUNEVisUtils.hpp" 
 #include "file_list.hpp"
+#include "Utils.hpp"
+
 
 
 // --- HARD CODE HERE ----------------
-int nfile_to_analyze = 10;
-size_t n_opdet = 4; // 480
-// size_t n_opdet = 480; // 480
-float light_yield = 27000;
+int nfile_to_analyze = 1e4;
+int max_nfiles = 1e4; // Maximum number of files to analyze
+// const size_t n_opdet = 4; // 480
+const size_t n_opdet = 480; // 480
+float light_yield = 20000;
 float arapuca_pde = 0.03;
 
 double pe_low = 0.;
@@ -39,24 +44,54 @@ double fit_up  = 100.;
 double min_visibility = 1.e-60;
 double hit_threshold = 1.5; // Will integrate Poisson [0, hit_threshold]
 
-TString visibility_file_name = "/exp/dune/data/users/dguffant/flash-match/dunevis_fdhd_1x2x6_test_photovisAr.root"; // File with the visibility maps
-std::string ana_folder_name = "/pnfs/dune/scratch/users/fgalizzi/prod_eminus_seed_2000/ana/"; // Folder where the ana files.root
+TString visibility_file_name = "dunevis_fdhd_1x2x6_test.root"; // File with the visibility maps
+std::string ana_folder_name = "/exp/dune/data/users/fgalizzi/prod_eminus/seed_0/ana/"; // Folder where the ana files.root
 std::string base_ana_file_name = "solar_ana_dune10kt_1x2x6_hist_";
 // -----------------------------------
 
 void buildmu(){
-  gStyle->SetPalette(kSunset);
- 
   // --- VISIBILITY STUFF -------------------------------------------------------
-  TFile* visibility_file = TFile::Open(visibility_file_name, "READ");
-  // Get the pointer for each opdet
-  THnSparseT<TArrayF>* h3VisMap_opDet[n_opdet];
-  for(int idx_opdet=0; idx_opdet<n_opdet; idx_opdet++){
-    TString name_h3_opdet = "h3VisMap_opDet"+std::to_string(idx_opdet);
-    visibility_file->GetObject(name_h3_opdet, h3VisMap_opDet[idx_opdet]);
-  }
-
+  TFile* ff = TFile::Open("dunevis_fdhd_1x2x6_test.root", "READ");
+  TTree* photoVisMap = (TTree*)ff->Get("photovisAr/photoVisMap");
+  TH1D* hgrid[3] = {nullptr};
+  hgrid[0] = (TH1D*)ff->Get("photovisAr/hgrid0");
+  hgrid[1] = (TH1D*)ff->Get("photovisAr/hgrid1");
+  hgrid[2] = (TH1D*)ff->Get("photovisAr/hgrid2");
   
+  TTree* tDimensions = (TTree*)ff->Get("photovisAr/tDimensions");
+  double coor_dim[3] = {0.};
+  tDimensions->SetBranchAddress("dimension", coor_dim);
+  tDimensions->GetEntry(0);
+  double tpc_min[3] = {coor_dim[0], coor_dim[1], coor_dim[2]}; // x,y,z
+  tDimensions->GetEntry(1);
+  double tpc_max[3] = {coor_dim[0], coor_dim[1], coor_dim[2]}; // x,y,z
+  std::vector<int> cryo_to_tpc = GetCryoToTPCMap(hgrid, tpc_min, tpc_max); // Get the mapping from cryostat voxel to TPC voxel
+  std::cout << "cryo_to_tpc size " << cryo_to_tpc.size() << std::endl;
+
+  double opDet_visDirect[n_opdet];
+  double opDet_visReflct[n_opdet];
+  const size_t n_entriesmap = photoVisMap->GetEntries();
+  std::vector<std::vector<float>> opDet_visMapDirect(n_entriesmap, std::vector<float>(n_opdet, 0.)); // Map to store visibility for each opdet
+  std::vector<std::vector<float>> opDet_visMapReflct(n_entriesmap, std::vector<float>(n_opdet, 0.)); // Map to store visibility for each opdet
+  photoVisMap->SetBranchStatus("*", 0); // Disable all branches
+  photoVisMap->SetBranchStatus("opDet_visDirect", 1);
+  photoVisMap->SetBranchStatus("opDet_visReflct", 1);
+  photoVisMap->SetBranchAddress("opDet_visDirect", opDet_visDirect);
+  photoVisMap->SetBranchAddress("opDet_visReflct", opDet_visReflct);
+  photoVisMap->Draw(">>elist", "", "entrylist");
+  TEntryList *elist = (TEntryList*)gDirectory->Get("elist");
+  photoVisMap->SetEntryList(elist);
+  std::cout << "Filling maps..." << std::endl;
+  for (int i = 0; i < photoVisMap->GetEntries(); ++i) {
+    if (i % 1000 == 0)
+        std::cout << i << " / " << n_entriesmap << "\r" << std::flush;
+    photoVisMap->GetEntry(i);
+    for (size_t j = 0; j < n_opdet; ++j) {
+      opDet_visMapDirect[i][j] = static_cast<float>(opDet_visDirect[j]);
+      opDet_visMapReflct[i][j] = static_cast<float>(opDet_visReflct[j]);
+    }
+  }
+  std::cout << "Done filling maps..." << std::endl;
 
   // --- HISTOS ----------------------------------------------------------------
   TH1D* h_Expected_Ophit_OpDet = new TH1D("h_Expected_Ophit_OpDet",
@@ -84,7 +119,7 @@ void buildmu(){
                                800*3, pe_low, pe_up*3, 800*3, pe_low, pe_up*3);
 
   TH2D* h2_ExpPe_HitTime = new TH2D("h2_HitPe_HitTime", Form("%s;%s;%s", "", "HitTime [ticks]", "Expected #Pe"),
-                                    200, -1.5, 4.5,
+                                    200, -1.0, 5.5,
                                     200, pe_low, pe_up);
 
   // TH2D for events where expected_photons > 5 and no detection
@@ -109,13 +144,16 @@ void buildmu(){
   
   TH2D* h_Residual = new TH2D("h_Residual",Form("%s;%s;%s", "", "Reco-True/True", "True"),
                               100, -1000, 1000, 100, 0, 1000);  //*100
-
-  // TEfficiency* he_Ophit_OpDet = nullptr;
   
+  // --- DELETES ---------------------------------------------------------------
+  delete photoVisMap; delete tDimensions;
+
   // --- LOOP OVER ANA FILES ---------------------------------------------------
   int nfile_analyzed = 0;
   int idx_file = 0;
-  while(nfile_analyzed < nfile_to_analyze && idx_file < 10000){
+  std::vector<double> vec_Expected_Ophit_OpDet(n_opdet, 0.); // Vector to store expected OpHits per OpDet
+  std::vector<double> vec_Reco_Ophit_OpDet(n_opdet, 0.); // Vector to store reconstructed OpHits per OpDet
+  while(nfile_analyzed < nfile_to_analyze && idx_file < max_nfiles){
     // --- ANA STUFF -----------------------------------------------------------
     std::string ana_file_name = std::string(ana_folder_name+base_ana_file_name+idx_file+".root"); 
     // Check whether file exists
@@ -123,53 +161,45 @@ void buildmu(){
     if(!std::filesystem::exists(ana_file_name)){
       continue;
     }
+    std::cout << nfile_analyzed << "- Analyzing file: " << ana_file_name << std::endl;
     nfile_analyzed++;
 
     TFile* ana_file = TFile::Open(ana_file_name.c_str(), "READ");
-    TDirectory* dir = (TDirectory*)ana_file->Get("solarnuana");
-    TTree* tree = (TTree*)(dir->Get("MCTruthTree"));
+    TTree* tree = static_cast<TTree*>(ana_file->Get("solarnuana/MCTruthTree"));
+    TTreeReader treeReader(tree);
 
-    // Set branches
-    float E_true, x_true, y_true, z_true;
-    int event_true;
-    std::vector<float>* OpHitPes = nullptr;
-    std::vector<float>* OpHitChannels = nullptr;
-    std::vector<float>* OpHitTimes = nullptr;
-    tree->SetBranchAddress("SignalParticleE", &E_true);
-    tree->SetBranchAddress("SignalParticleX", &x_true);
-    tree->SetBranchAddress("SignalParticleY", &y_true);
-    tree->SetBranchAddress("SignalParticleZ", &z_true);
-    tree->SetBranchAddress("Event", &event_true);
-
-    tree->SetBranchAddress("OpHitPE", &OpHitPes);
-    tree->SetBranchAddress("OpHitChannel", &OpHitChannels);
-    tree->SetBranchAddress("OpHitTime", &OpHitTimes);
+    TTreeReaderValue<float> E_true(treeReader, "SignalParticleE");
+    TTreeReaderValue<float> x_true(treeReader, "SignalParticleX");
+    TTreeReaderValue<float> y_true(treeReader, "SignalParticleY");
+    TTreeReaderValue<float> z_true(treeReader, "SignalParticleZ");
+    TTreeReaderValue<int> event_true(treeReader, "Event");
+    TTreeReaderValue<std::vector<float>> OpHitPes(treeReader, "OpHitPE");
+    TTreeReaderValue<std::vector<float>> OpHitChannels(treeReader, "OpHitChannel");
+    TTreeReaderValue<std::vector<float>> OpHitTimes(treeReader, "OpHitTime");
   
-    TFile* debug_file = TFile::Open(debug_file_name.c_str(), "READ");
-    TDirectory* dir_debug = (TDirectory*)debug_file->Get("simphcount");
-    TTree* t_DetectedPhotons = (TTree*)(dir_debug->Get("DetectedPhotons"));
-
 
     // --- LOOP OVER TREE -----------------------------------------------------
-    Long64_t nEntries = tree->GetEntries();
-    for (Long64_t idx_entry = 0; idx_entry < nEntries; ++idx_entry) {
-      tree->GetEntry(idx_entry);
+    size_t idx_entry = 0;
+    while (treeReader.Next()) {
+      idx_entry++;
       double exp_ph;
       double exp_ph_min;
+      double vertex_coor[3] = {*x_true, *y_true, *z_true};
+      int tpc_index = GetTPCIndex(vertex_coor, hgrid, cryo_to_tpc);
+      if (tpc_index < 0 || tpc_index >= int(cryo_to_tpc.size())) {
+        std::cout << "Event " << *event_true << " has no valid TPC index!" << std::endl;
+        std::cout << vertex_coor[0] << " " << vertex_coor[1] << " " << vertex_coor[2] << std::endl;
+        continue; // Skip this entry if TPC index is invalid
+      }
 
       // --- LOOP OVER OPDETS -------------------------------------------------
       for(size_t idx_opdet=0; idx_opdet<n_opdet; idx_opdet++){
-        int idx_bin[3];
-        idx_bin[0] = h3VisMap_opDet[idx_opdet]->GetAxis(0)->FindBin(x_true);
-        idx_bin[1] = h3VisMap_opDet[idx_opdet]->GetAxis(1)->FindBin(y_true);
-        idx_bin[2] = h3VisMap_opDet[idx_opdet]->GetAxis(2)->FindBin(z_true);
-        double voxel_vis = h3VisMap_opDet[idx_opdet]->GetBinContent(idx_bin);
-        
+        double voxel_vis = opDet_visMapDirect[tpc_index][idx_opdet] + opDet_visMapReflct[tpc_index][idx_opdet];
 
-        exp_ph = E_true*light_yield*voxel_vis*arapuca_pde;
-        exp_ph_min = E_true*light_yield*min_visibility*arapuca_pde;
+        exp_ph = (*E_true)*light_yield*voxel_vis*arapuca_pde;
+        exp_ph_min = (*E_true)*light_yield*min_visibility*arapuca_pde;
         if(exp_ph==0.) exp_ph = exp_ph_min;
-        h_Expected_Ophit_OpDet->SetBinContent(idx_opdet, h_Expected_Ophit_OpDet->GetBinContent(idx_opdet)+exp_ph);
+        vec_Expected_Ophit_OpDet[idx_opdet] += exp_ph;
         h_Expected_Pe->Fill(exp_ph);
 
         // --- IF RECONSTRUCTED ------------------------------------------------
@@ -180,7 +210,7 @@ void buildmu(){
           h2_exp_reco_large->Fill((*OpHitPes)[idx_hit], exp_ph);
           h2_ExpPe_HitTime->Fill((*OpHitTimes)[idx_hit], exp_ph);
           h_Expected_PeReco->Fill(exp_ph);
-          h_Reco_Ophit_OpDet->SetBinContent(idx_opdet, h_Reco_Ophit_OpDet->GetBinContent(idx_opdet)+exp_ph);
+          vec_Reco_Ophit_OpDet[idx_opdet] += (*OpHitPes)[idx_hit];
           h_Residual->Fill(((((*OpHitPes)[idx_hit])-exp_ph)/exp_ph)*100, exp_ph); 
           if(exp_ph == exp_ph_min && (*OpHitPes)[idx_hit] > 0.0 ){    //true==0, ophit>0 per opdet??
             h_Ghost->Fill(exp_ph, (*OpHitPes)[idx_hit]); 
@@ -191,16 +221,22 @@ void buildmu(){
           h2_exp_reco->Fill(0., exp_ph);
           h2_exp_reco_large->Fill(0., exp_ph);
           if (exp_ph > 5.){
-            hfail_Etrue_OpDet->Fill(idx_opdet, E_true);
-            hfail_Xtrue_OpDet->Fill(idx_opdet, x_true);
-            hfail_Ytrue_OpDet->Fill(idx_opdet, y_true);
-            hfail_Ztrue_OpDet->Fill(idx_opdet, z_true);
+            hfail_Etrue_OpDet->Fill(idx_opdet, *E_true);
+            hfail_Xtrue_OpDet->Fill(idx_opdet, *x_true);
+            hfail_Ytrue_OpDet->Fill(idx_opdet, *y_true);
+            hfail_Ztrue_OpDet->Fill(idx_opdet, *z_true);
           }
         } // not reconstructed
       } // end loop over opdets
     } // end loop over tree
     ana_file->Close();
   } // end loop over ana files
+
+  // Fill these histogram in a single loop to avoid GetBinContent calls
+  for(size_t idx_opdet=0; idx_opdet<n_opdet; idx_opdet++){
+    h_Expected_Ophit_OpDet->SetBinContent(idx_opdet+1, vec_Expected_Ophit_OpDet[idx_opdet]);
+    h_Reco_Ophit_OpDet->SetBinContent(idx_opdet+1, vec_Reco_Ophit_OpDet[idx_opdet]);
+  }
 
 
   // --- EXTRA PLOTS -----------------------------------------------------------
@@ -227,61 +263,6 @@ void buildmu(){
   h_Expected_PeReco_Prof->Write();
   h2_ExpPe_HitTime->Write();
   out_file->Close();
-
-
-
-  // --- PLOTTING ----------------------------------------------------------------
-  TCanvas* cfail_Etrue_Opdet = new TCanvas("cfail_Etrue_Opdet","cfail_Etrue_Opdet",0,0,800,600);
-  cfail_Etrue_Opdet->cd();
-  hfail_Etrue_OpDet->Draw("colz");
-  cfail_Etrue_Opdet->Modified(); cfail_Etrue_Opdet->Update();
-
-  TCanvas* cfail_Xtrue_Opdet = new TCanvas("cfail_Xtrue_Opdet","cfail_Xtrue_Opdet",0,0,800,600);
-  cfail_Xtrue_Opdet->cd();
-  hfail_Xtrue_OpDet->Draw("colz");
-  cfail_Xtrue_Opdet->Modified(); cfail_Xtrue_Opdet->Update();
-
-  TCanvas* cfail_Ytrue_Opdet = new TCanvas("cfail_Ytrue_Opdet","cfail_Ytrue_Opdet",0,0,800,600);
-  cfail_Ytrue_Opdet->cd();
-  hfail_Ytrue_OpDet->Draw("colz");
-  cfail_Ytrue_Opdet->Modified(); cfail_Ytrue_Opdet->Update();
-
-  TCanvas* cfail_Ztrue_Opdet = new TCanvas("cfail_Ztrue_Opdet","cfail_Ztrue_Opdet",0,0,800,600);
-  cfail_Ztrue_Opdet->cd();
-  hfail_Ztrue_OpDet->Draw("colz");
-  cfail_Ztrue_Opdet->Modified(); cfail_Ztrue_Opdet->Update();
-
-  TCanvas* c_Ophit_OpDet= new TCanvas("c_Ophit_OpDet","c_Ophit_OpDet",0,0,800,600);
-  c_Ophit_OpDet->cd();
-  h_Expected_Ophit_OpDet->Draw();
-  h_Reco_Ophit_OpDet->Draw("same");
-  c_Ophit_OpDet->Modified(); c_Ophit_OpDet->Update();
-
-  TCanvas* c_Mu_Pe = new TCanvas("c_Mu_Pe ","c_Mu_Pe ",0,0,800,600);
-  c_Mu_Pe ->cd();
-  h2_exp_reco->Draw("colz");
-  f1->Draw("same");
-  c_Mu_Pe ->Modified(); c_Mu_Pe ->Update();
-
-  TCanvas* c_HitTime_HitPE = new TCanvas("c_HitTime_HitPE","c_HitTime_HitPE",0,0,800,600);
-  c_HitTime_HitPE->cd();
-  h2_ExpPe_HitTime->Draw("colz"); 
-  c_HitTime_HitPE->Modified(); c_HitTime_HitPE->Update();
-
-  TCanvas* c_Ghost= new TCanvas("c_Ghost","c_Ghost",0,0,800,600);
-  c_Ghost->cd();
-  h_Ghost->Draw("colz");
-  c_Ghost->Modified(); c_Ghost->Update();
-
-  TCanvas* c_Resid= new TCanvas("c_Resid","c_Resid",0,0,800,600);
-  c_Resid->cd();
-  h_Residual->Draw("colz");
-  c_Resid->Modified(); c_Resid->Update();
-  
-  TCanvas* c_Hit_Probability = new TCanvas("c_Hit_Probability","c_Hit_Probability",0,0,800,600);
-  c_Hit_Probability->cd();
-  he_Hit_Prob->Draw();
-  c_Hit_Probability->Modified(); c_Hit_Probability->Update();
 
   return;
 }
