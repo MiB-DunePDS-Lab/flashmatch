@@ -1,0 +1,19 @@
+#include "standard_reco2_dune10kt.fcl"
+
+process_name: Reco2
+
+services:
+{
+    @table::services
+    @table::dunefd_1x2x6_reco_services
+}
+
+physics.producers:
+{
+    @table::physics.producers
+    wclsmcnfsp: @local::dune10kt_1x2x6_mc_nfsp
+}
+
+physics.producers.opdec.WfmPostfilter.Cutoff: 1.6
+physics.producers.ophitspe.HitThreshold: 2.0
+physics.producers.ophitspe.HitAlgoPset.ADCThreshold: 2.0
