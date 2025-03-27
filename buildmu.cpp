@@ -52,14 +52,14 @@ std::string base_ana_file_name = "solar_ana_dune10kt_1x2x6_hist_";
 
 void buildmu(){
   // --- VISIBILITY STUFF -------------------------------------------------------
-  TFile* ff = TFile::Open("dunevis_fdhd_1x2x6_test.root", "READ");
-  TTree* photoVisMap = (TTree*)ff->Get("photovisAr/photoVisMap");
+  TFile* visibility_file = TFile::Open(visibility_file_name, "READ");
+  TTree* photoVisMap = (TTree*)visibility_file->Get("photovisAr/photoVisMap");
   TH1D* hgrid[3] = {nullptr};
-  hgrid[0] = (TH1D*)ff->Get("photovisAr/hgrid0");
-  hgrid[1] = (TH1D*)ff->Get("photovisAr/hgrid1");
-  hgrid[2] = (TH1D*)ff->Get("photovisAr/hgrid2");
+  hgrid[0] = (TH1D*)visibility_file->Get("photovisAr/hgrid0");
+  hgrid[1] = (TH1D*)visibility_file->Get("photovisAr/hgrid1");
+  hgrid[2] = (TH1D*)visibility_file->Get("photovisAr/hgrid2");
   
-  TTree* tDimensions = (TTree*)ff->Get("photovisAr/tDimensions");
+  TTree* tDimensions = (TTree*)visibility_file->Get("photovisAr/tDimensions");
   double coor_dim[3] = {0.};
   tDimensions->SetBranchAddress("dimension", coor_dim);
   tDimensions->GetEntry(0);
