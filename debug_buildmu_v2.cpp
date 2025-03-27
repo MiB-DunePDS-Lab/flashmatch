@@ -12,20 +12,25 @@
 #include <TArrayF.h>
 #include <TEfficiency.h>
 #include <TStyle.h>
+#include <TTreeReader.h>
+#include <TTreeReaderArray.h>
 
 #include <cmath>
 #include <cstddef>
 #include <iostream>
 #include <string>
 #include <vector>
+#include <filesystem>  // C++17
 
 #include "DUNEVisUtils.hpp" 
+#include "Utils.hpp"
 
 
 
 
 // --- HARD CODE HERE ----------------
 int nfile_to_analyze = 127;
+int max_nfiles = 2000; // Maximum number of files to analyze
 size_t n_opdet = 2; // 480
 // size_t n_opdet = 480; // 480
 float light_yield = 20000;
@@ -58,13 +63,43 @@ void debug_buildmu2(){
  
   // --- VISIBILITY STUFF -------------------------------------------------------
   TFile* visibility_file = TFile::Open(visibility_file_name, "READ");
-  // Get the pointer for each opdet
-  THnSparseT<TArrayF>* h3VisMap_opDet[n_opdet];
-  for(int idx_opdet=0; idx_opdet<n_opdet; idx_opdet++){
-    TString name_h3_opdet = "h3VisMap_opDet"+std::to_string(idx_opdet);
-    visibility_file->GetObject(name_h3_opdet, h3VisMap_opDet[idx_opdet]);
-  }
+  TTree* photoVisMap = (TTree*)visibility_file->Get("photovisAr/photoVisMap");
+  TH1D* hgrid[3] = {nullptr};
+  hgrid[0] = (TH1D*)visibility_file->Get("photovisAr/hgrid0");
+  hgrid[1] = (TH1D*)visibility_file->Get("photovisAr/hgrid1");
+  hgrid[2] = (TH1D*)visibility_file->Get("photovisAr/hgrid2");
+  
+  TTree* tDimensions = (TTree*)visibility_file->Get("photovisAr/tDimensions");
+  double coor_dim[3] = {0.};
+  tDimensions->SetBranchAddress("dimension", coor_dim);
+  tDimensions->GetEntry(0);
+  double tpc_min[3] = {coor_dim[0], coor_dim[1], coor_dim[2]}; // x,y,z
+  tDimensions->GetEntry(1);
+  double tpc_max[3] = {coor_dim[0], coor_dim[1], coor_dim[2]}; // x,y,z
+  std::vector<int> cryo_to_tpc = GetCryoToTPCMap(hgrid, tpc_min, tpc_max); // Get the mapping from cryostat voxel to TPC voxel
+  std::cout << "cryo_to_tpc size " << cryo_to_tpc.size() << std::endl;
 
+  double opDet_visDirect[n_opdet];
+  double opDet_visReflct[n_opdet];
+  const size_t n_entriesmap = photoVisMap->GetEntries();
+  std::vector<std::vector<float>> opDet_visMapDirect(n_entriesmap, std::vector<float>(n_opdet, 0.)); // Map to store visibility for each opdet
+  std::vector<std::vector<float>> opDet_visMapReflct(n_entriesmap, std::vector<float>(n_opdet, 0.)); // Map to store visibility for each opdet
+  TTreeReader VisMapReader(photoVisMap);
+  TTreeReaderArray<double> opDet_visDirect_reader(VisMapReader, "opDet_visDirect");
+  TTreeReaderArray<double> opDet_visReflct_reader(VisMapReader, "opDet_visReflct");
+  
+  std::cout << "Filling maps..." << std::endl;
+  int VisMapEntry = 0; int n_VisMapEntries = photoVisMap->GetEntries();
+  while (VisMapReader.Next()){
+    for (size_t j = 0; j < n_opdet; ++j) {
+      opDet_visMapDirect[VisMapEntry][j] = static_cast<float>(opDet_visDirect_reader[j]);
+      opDet_visMapReflct[VisMapEntry][j] = static_cast<float>(opDet_visReflct_reader[j]);
+    }
+    VisMapEntry++;
+    if (VisMapEntry % 1000 == 0)
+      std::cout << VisMapEntry << " / " << n_VisMapEntries << "\r" << std::flush;
+  }
+  std::cout << "Done filling maps..." << std::endl;
   
 
   // --- HISTOS ----------------------------------------------------------------
@@ -133,7 +168,7 @@ void debug_buildmu2(){
   // --- LOOP OVER ANA FILES ---------------------------------------------------
   int nfile_analyzed = 0;
   int idx_file = 0;
-  while(nfile_analyzed < nfile_to_analyze && idx_file < 2000){
+  while(nfile_analyzed < nfile_to_analyze && idx_file < max_nfiles){
     // --- ANA STUFF -----------------------------------------------------------
     std::string ana_file_name = std::string(ana_folder_name+base_ana_file_name+idx_file+".root"); 
     std::string debug_file_name = std::string(debug_folder_name+base_debug_file_name+idx_file+".root");
@@ -146,26 +181,17 @@ void debug_buildmu2(){
     std::cout <<nfile_analyzed<<"--"<< ana_file_name << std::endl;
 
     TFile* ana_file = TFile::Open(ana_file_name.c_str(), "READ");
-    TDirectory* dir = (TDirectory*)ana_file->Get("solarnuana");
-    TTree* tree = (TTree*)(dir->Get("MCTruthTree"));
-    // cout << "Tree ok" << endl;
-    //tree->Print();
+    TTree* tree = static_cast<TTree*>(ana_file->Get("solarnuana/MCTruthTree"));
+    TTreeReader treeReader(tree);
 
-    // Set branches
-    float E_true, x_true, y_true, z_true;
-    int event_true;
-    std::vector<float>* OpHitPes = nullptr;
-    std::vector<float>* OpHitChannels = nullptr;
-    std::vector<float>* OpHitTimes = nullptr;
-    tree->SetBranchAddress("SignalParticleE", &E_true);
-    tree->SetBranchAddress("SignalParticleX", &x_true);
-    tree->SetBranchAddress("SignalParticleY", &y_true);
-    tree->SetBranchAddress("SignalParticleZ", &z_true);
-    tree->SetBranchAddress("Event", &event_true);
-
-    tree->SetBranchAddress("OpHitPE", &OpHitPes);
-    tree->SetBranchAddress("OpHitChannel", &OpHitChannels);
-    tree->SetBranchAddress("OpHitTime", &OpHitTimes);
+    TTreeReaderValue<float> E_true(treeReader, "SignalParticleE");
+    TTreeReaderValue<float> x_true(treeReader, "SignalParticleX");
+    TTreeReaderValue<float> y_true(treeReader, "SignalParticleY");
+    TTreeReaderValue<float> z_true(treeReader, "SignalParticleZ");
+    TTreeReaderValue<int> event_true(treeReader, "Event");
+    TTreeReaderValue<std::vector<float>> OpHitPes(treeReader, "OpHitPE");
+    TTreeReaderValue<std::vector<float>> OpHitChannels(treeReader, "OpHitChannel");
+    TTreeReaderValue<std::vector<float>> OpHitTimes(treeReader, "OpHitTime");
   
     // Debug stuff
     TFile* debug_file = TFile::Open(debug_file_name.c_str(), "READ");
@@ -177,13 +203,19 @@ void debug_buildmu2(){
 
 
     // --- LOOP OVER TREE -----------------------------------------------------
-    Long64_t nEntries = tree->GetEntries();
     Long64_t nEntries_debug = t_DetectedPhotons->GetEntries();
     Long64_t entry_debug = 0;
-    for (Long64_t idx_event = 0; idx_event < nEntries; ++idx_event) {
-      tree->GetEntry(idx_event);
+    int idx_event = 0;
+    while (treeReader.Next()) {
       double exp_ph;
       double exp_ph_min;
+      double vertex_coor[3] = {*x_true, *y_true, *z_true};
+      int tpc_index = GetTPCIndex(vertex_coor, hgrid, cryo_to_tpc);
+      if (tpc_index < 0 || tpc_index >= int(cryo_to_tpc.size())) {
+        std::cout << "Event " << *event_true << " has no valid TPC index!" << std::endl;
+        std::cout << vertex_coor[0] << " " << vertex_coor[1] << " " << vertex_coor[2] << std::endl;
+        continue; // Skip this entry if TPC index is invalid
+      }
 
       t_DetectedPhotons->GetEntry(0);
       std::map<int, int> opdet_detphotons;
@@ -206,16 +238,10 @@ void debug_buildmu2(){
 
       // --- LOOP OVER OPDETS -------------------------------------------------
       for(size_t idx_opdet=0; idx_opdet<n_opdet; idx_opdet++){
-        
-        int idx_bin[3];
-        idx_bin[0] = h3VisMap_opDet[idx_opdet]->GetAxis(0)->FindBin(x_true);
-        idx_bin[1] = h3VisMap_opDet[idx_opdet]->GetAxis(1)->FindBin(y_true);
-        idx_bin[2] = h3VisMap_opDet[idx_opdet]->GetAxis(2)->FindBin(z_true);
-        double voxel_vis = h3VisMap_opDet[idx_opdet]->GetBinContent(idx_bin);
-        
+        double voxel_vis = opDet_visMapDirect[tpc_index][idx_opdet] + opDet_visMapReflct[tpc_index][idx_opdet];
 
-        exp_ph = E_true*light_yield*voxel_vis*arapuca_pde;
-        exp_ph_min = E_true*light_yield*min_visibility*arapuca_pde;
+        exp_ph = (*E_true)*light_yield*voxel_vis*arapuca_pde;
+        exp_ph_min = (*E_true)*light_yield*min_visibility*arapuca_pde;
         if(exp_ph==0.) exp_ph = exp_ph_min;
         h_Expected_Ophit_OpDet->SetBinContent(idx_opdet, h_Expected_Ophit_OpDet->GetBinContent(idx_opdet)+exp_ph);
         h_Expected_Pe->Fill(exp_ph);
@@ -243,13 +269,14 @@ void debug_buildmu2(){
           h2_reco_exp->Fill(exp_ph,0.);
           h2_reco_exp_large->Fill(exp_ph,0.);
           if (exp_ph > 5.){
-            hfail_Etrue_OpDet->Fill(idx_opdet, E_true);
-            hfail_Xtrue_OpDet->Fill(idx_opdet, x_true);
-            hfail_Ytrue_OpDet->Fill(idx_opdet, y_true);
-            hfail_Ztrue_OpDet->Fill(idx_opdet, z_true);
+            hfail_Etrue_OpDet->Fill(idx_opdet, *E_true);
+            hfail_Xtrue_OpDet->Fill(idx_opdet, *x_true);
+            hfail_Ytrue_OpDet->Fill(idx_opdet, *y_true);
+            hfail_Ztrue_OpDet->Fill(idx_opdet, *z_true);
           }
         } // not reconstructed
       } // end loop over opdets
+      idx_event++;
     } // end loop over tree
     ana_file->Close();
     debug_file->Close();
