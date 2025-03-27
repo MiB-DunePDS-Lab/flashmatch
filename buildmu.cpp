@@ -90,6 +90,22 @@ void buildmu(){
       std::cout << VisMapEntry << " / " << n_VisMapEntries << "\r" << std::flush;
   }
   std::cout << "Done filling maps..." << std::endl;
+  
+  // --- OUTPUT ----------------------------------------------------------------
+  TFile* out_file = TFile::Open("Mu_Expected.root", "RECREATE");
+  Int_t ifile = 0;
+  Int_t iev = 0;
+  Double_t mu[n_opdet] = {0.};
+  Double_t reco_pe[n_opdet] = {0.};
+  Double_t hit_t[n_opdet] = {0.};
+  Bool_t   hit[n_opdet] = {false};
+  TTree* out_tree = new TTree("MuRecoTree", "summary tree");
+  out_tree->Branch("ifile", &ifile);
+  out_tree->Branch("iev", &iev);
+  out_tree->Branch("mu", mu, Form("mu[%d]/D", int(n_opdet)));
+  out_tree->Branch("reco_pe", reco_pe, Form("reco_pe[%d]/D", int(n_opdet)));
+  out_tree->Branch("hit_t", hit_t, Form("hit_t[%d]/D", int(n_opdet)));
+  out_tree->Branch("hit", hit, Form("hit[%d]/O", int(n_opdet)));
 
   // --- HISTOS ----------------------------------------------------------------
   TH1D* h_Expected_Ophit_OpDet = new TH1D("h_Expected_Ophit_OpDet",
@@ -154,6 +170,7 @@ void buildmu(){
   while(nfile_analyzed < nfile_to_analyze && idx_file < max_nfiles){
     // --- ANA STUFF -----------------------------------------------------------
     std::string ana_file_name = std::string(ana_folder_name+base_ana_file_name+idx_file+".root"); 
+    ifile = idx_file;
     // Check whether file exists
     idx_file++;
     if(!std::filesystem::exists(ana_file_name)){
@@ -170,7 +187,6 @@ void buildmu(){
     TTreeReaderValue<float> x_true(treeReader, "SignalParticleX");
     TTreeReaderValue<float> y_true(treeReader, "SignalParticleY");
     TTreeReaderValue<float> z_true(treeReader, "SignalParticleZ");
-    TTreeReaderValue<int> event_true(treeReader, "Event");
     TTreeReaderValue<std::vector<float>> OpHitPes(treeReader, "OpHitPE");
     TTreeReaderValue<std::vector<float>> OpHitChannels(treeReader, "OpHitChannel");
     TTreeReaderValue<std::vector<float>> OpHitTimes(treeReader, "OpHitTime");
@@ -179,31 +195,39 @@ void buildmu(){
     // --- LOOP OVER TREE -----------------------------------------------------
     size_t idx_entry = 0;
     while (treeReader.Next()) {
+      iev = int(idx_entry);
       idx_entry++;
       double exp_ph;
       double exp_ph_min;
       double vertex_coor[3] = {*x_true, *y_true, *z_true};
       int tpc_index = GetTPCIndex(vertex_coor, hgrid, cryo_to_tpc);
       if (tpc_index < 0 || tpc_index >= int(cryo_to_tpc.size())) {
-        std::cout << "Event " << *event_true << " has no valid TPC index!" << std::endl;
+        std::cout << "Event " << iev << " has no valid TPC index!" << std::endl;
         std::cout << vertex_coor[0] << " " << vertex_coor[1] << " " << vertex_coor[2] << std::endl;
         continue; // Skip this entry if TPC index is invalid
       }
 
       // --- LOOP OVER OPDETS -------------------------------------------------
       for(size_t idx_opdet=0; idx_opdet<n_opdet; idx_opdet++){
+        // Reset variables
+        mu[idx_opdet] = 0.; reco_pe[idx_opdet] = 0.; hit_t[idx_opdet] = 0.; hit[idx_opdet] = false;
+
         double voxel_vis = opDet_visMapDirect[tpc_index][idx_opdet] + opDet_visMapReflct[tpc_index][idx_opdet];
 
         exp_ph = (*E_true)*light_yield*voxel_vis*arapuca_pde;
         exp_ph_min = (*E_true)*light_yield*min_visibility*arapuca_pde;
         if(exp_ph==0.) exp_ph = exp_ph_min;
+        mu[idx_opdet] = exp_ph;
         vec_Expected_Ophit_OpDet[idx_opdet] += exp_ph;
         h_Expected_Pe->Fill(exp_ph);
 
         // --- IF RECONSTRUCTED ------------------------------------------------
         auto it = std::find((*OpHitChannels).begin(), (*OpHitChannels).end(), float(idx_opdet));
         size_t idx_hit = std::distance((*OpHitChannels).begin(), it);
-        if(idx_hit != (*OpHitChannels).size()){ 
+        if(idx_hit != (*OpHitChannels).size()){
+          reco_pe[idx_opdet] = (*OpHitPes)[idx_hit];
+          hit_t[idx_opdet] = (*OpHitTimes)[idx_hit];
+          hit[idx_opdet] = true;
           h2_exp_reco->Fill((*OpHitPes)[idx_hit], exp_ph);
           h2_exp_reco_large->Fill((*OpHitPes)[idx_hit], exp_ph);
           h2_ExpPe_HitTime->Fill((*OpHitTimes)[idx_hit], exp_ph);
@@ -226,28 +250,40 @@ void buildmu(){
           }
         } // not reconstructed
       } // end loop over opdets
+      out_tree->Fill();
     } // end loop over tree
     ana_file->Close();
   } // end loop over ana files
-
-  // Fill these histogram in a single loop to avoid GetBinContent calls
-  for(size_t idx_opdet=0; idx_opdet<n_opdet; idx_opdet++){
-    h_Expected_Ophit_OpDet->SetBinContent(idx_opdet+1, vec_Expected_Ophit_OpDet[idx_opdet]);
-    h_Reco_Ophit_OpDet->SetBinContent(idx_opdet+1, vec_Reco_Ophit_OpDet[idx_opdet]);
-  }
-
-
+ 
   // --- EXTRA PLOTS -----------------------------------------------------------
   TProfile* h_Expected_PeReco_Prof = h2_exp_reco_large->ProfileX();
-  h2_exp_reco_large->Delete();
   TF1* f1 = new TF1("f1", "pol1", fit_low, fit_up);
   h_Expected_PeReco_Prof->Fit("f1", "R");
 
   TEfficiency* he_Hit_Prob = new TEfficiency(*h_Expected_PeReco,*h_Expected_Pe);
   he_Hit_Prob->SetTitle("Hit Probability;Expected #Pe;Detection Probability");
+  he_Hit_Prob->SetName("HitProb_ExpPe");
+  
+  // Fill these histogram in a single loop to avoid GetBinContent calls
+  for(size_t idx_opdet=0; idx_opdet<n_opdet; idx_opdet++){
+    h_Expected_Ophit_OpDet->SetBinContent(idx_opdet, vec_Expected_Ophit_OpDet[idx_opdet]);
+    h_Reco_Ophit_OpDet->SetBinContent(idx_opdet, vec_Reco_Ophit_OpDet[idx_opdet]);
+  }
+  
+
+
+  out_file->cd();
+  out_tree->Write();
+  h2_exp_reco->Write();
+  he_Hit_Prob->Write();
+  h2_exp_reco_large->Write();
+
+
+
   
   // --- SAVE -------------------------------------------------------------------
-  TFile* out_file = TFile::Open("out_buildmu.root", "RECREATE");
+  TFile* out_file_hist = TFile::Open("out_buildmu.root", "RECREATE");
+  out_file_hist->cd();
   hfail_Etrue_OpDet->Write();
   hfail_Xtrue_OpDet->Write();
   hfail_Ytrue_OpDet->Write();
@@ -261,6 +297,7 @@ void buildmu(){
   h2_exp_reco_large->Write();
   h_Expected_PeReco_Prof->Write();
   h2_ExpPe_HitTime->Write();
+  out_file_hist->Close();
   out_file->Close();
 
   return;
