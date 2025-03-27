@@ -5,4 +5,5 @@
 *.pcm
 *.so
 *.root
+*ACLiC*
 ana/*
