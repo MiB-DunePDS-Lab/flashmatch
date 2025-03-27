@@ -10,6 +10,7 @@
 #include <TTree.h>
 #include <THnSparse.h>
 #include <TTreeReader.h>
+#include <TTreeReaderArray.h>
 #include <TArrayF.h>
 #include <TEfficiency.h>
 #include <TStyle.h>
@@ -73,23 +74,20 @@ void buildmu(){
   const size_t n_entriesmap = photoVisMap->GetEntries();
   std::vector<std::vector<float>> opDet_visMapDirect(n_entriesmap, std::vector<float>(n_opdet, 0.)); // Map to store visibility for each opdet
   std::vector<std::vector<float>> opDet_visMapReflct(n_entriesmap, std::vector<float>(n_opdet, 0.)); // Map to store visibility for each opdet
-  photoVisMap->SetBranchStatus("*", 0); // Disable all branches
-  photoVisMap->SetBranchStatus("opDet_visDirect", 1);
-  photoVisMap->SetBranchStatus("opDet_visReflct", 1);
-  photoVisMap->SetBranchAddress("opDet_visDirect", opDet_visDirect);
-  photoVisMap->SetBranchAddress("opDet_visReflct", opDet_visReflct);
-  photoVisMap->Draw(">>elist", "", "entrylist");
-  TEntryList *elist = (TEntryList*)gDirectory->Get("elist");
-  photoVisMap->SetEntryList(elist);
+  TTreeReader VisMapReader(photoVisMap);
+  TTreeReaderArray<double> opDet_visDirect_reader(VisMapReader, "opDet_visDirect");
+  TTreeReaderArray<double> opDet_visReflct_reader(VisMapReader, "opDet_visReflct");
+  
   std::cout << "Filling maps..." << std::endl;
-  for (int i = 0; i < photoVisMap->GetEntries(); ++i) {
-    if (i % 1000 == 0)
-        std::cout << i << " / " << n_entriesmap << "\r" << std::flush;
-    photoVisMap->GetEntry(i);
+  int VisMapEntry = 0; int n_VisMapEntries = photoVisMap->GetEntries();
+  while (VisMapReader.Next()){
     for (size_t j = 0; j < n_opdet; ++j) {
-      opDet_visMapDirect[i][j] = static_cast<float>(opDet_visDirect[j]);
-      opDet_visMapReflct[i][j] = static_cast<float>(opDet_visReflct[j]);
+      opDet_visMapDirect[VisMapEntry][j] = static_cast<float>(opDet_visDirect_reader[j]);
+      opDet_visMapReflct[VisMapEntry][j] = static_cast<float>(opDet_visReflct_reader[j]);
     }
+    VisMapEntry++;
+    if (VisMapEntry % 1000 == 0)
+      std::cout << VisMapEntry << " / " << n_VisMapEntries << "\r" << std::flush;
   }
   std::cout << "Done filling maps..." << std::endl;
 
@@ -116,7 +114,7 @@ void buildmu(){
 
   TH2D* h2_exp_reco_large = new TH2D("h2_exp_reco_large",
                                Form("%s;%s;%s", "", "Reco #Pe", "Expected #Pe"),
-                               800*3, pe_low, pe_up*3, 800*3, pe_low, pe_up*3);
+                               800*5, pe_low, pe_up*5, 800*5, pe_low, pe_up*5);
 
   TH2D* h2_ExpPe_HitTime = new TH2D("h2_HitPe_HitTime", Form("%s;%s;%s", "", "HitTime [ticks]", "Expected #Pe"),
                                     200, -1.0, 5.5,
@@ -260,6 +258,7 @@ void buildmu(){
   he_Hit_Prob->Write();
   h_Expected_PeReco->Write();
   h2_exp_reco->Write();
+  h2_exp_reco_large->Write();
   h_Expected_PeReco_Prof->Write();
   h2_ExpPe_HitTime->Write();
   out_file->Close();
