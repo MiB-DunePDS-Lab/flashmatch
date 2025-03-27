@@ -30,7 +30,6 @@ float light_yield = 20000;
 float arapuca_pde = 0.03;
 
 double min_visibility = 1.e-60;
-double hit_threshold = 1.5; // Will integrate Poisson [0, hit_threshold]
 
 TString buildmu_output = "./out_buildmu.root";
 TString visibility_file_name = "./dunevis_fdhd_1x2x6_test.root";
