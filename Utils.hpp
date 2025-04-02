@@ -25,10 +25,11 @@ std::vector<int> GetCryoToTPCMap(TH1D* hgrid[3], double tpc_min[3], double tpc_m
   return total_to_tpc;
 }
 
-bool isInTPC(double vertex_coor[3], double tpc_min[3], double tpc_max[3]){
-  return (vertex_coor[0] > tpc_min[0] && vertex_coor[0] < tpc_max[0] &&
-          vertex_coor[1] > tpc_min[1] && vertex_coor[1] < tpc_max[1] &&
-          vertex_coor[2] > tpc_min[2] && vertex_coor[2] < tpc_max[2]);
+bool isInFiducialVolume(double vertex_coor[3], double vol_min[3], double vol_max[3], double x_cut){
+  return (vertex_coor[0] > vol_min[0] && vertex_coor[0] < vol_max[0] &&
+          vertex_coor[1] > vol_min[1] && vertex_coor[1] < vol_max[1] &&
+          vertex_coor[2] > vol_min[2] && vertex_coor[2] < vol_max[2] &&
+          abs(vertex_coor[0]) > x_cut);
 }
 
 int GetTPCIndex(double vertex_coor[3], TH1D* hgrid[3], std::vector<int>& total_to_tpc){
