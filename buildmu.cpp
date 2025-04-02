@@ -43,10 +43,9 @@ double fit_low = 11.;
 double fit_up  = 100.;
 
 double min_visibility = 1.e-60;
-double hit_threshold = 1.5; // Will integrate Poisson [0, hit_threshold]
 
 TString visibility_file_name = "dunevis_fdhd_1x2x6_test.root"; // File with the visibility maps
-std::string ana_folder_name = "/exp/dune/data/users/fgalizzi/prod_eminus/seed_0/ana/"; // Folder where the ana files.root
+std::string ana_folder_name = "/exp/dune/data/users/fgalizzi/prod_eminus/seed_2000/ana/"; // Folder where the ana files.root
 std::string base_ana_file_name = "solar_ana_dune10kt_1x2x6_hist_";
 // -----------------------------------
 
@@ -240,8 +239,8 @@ void buildmu(){
         } // reconstructed
         // --- IF NOT RECONSTRUCTED --------------------------------------------
         else {
-          h2_exp_reco->Fill(0., exp_ph);
-          h2_exp_reco_large->Fill(0., exp_ph);
+          // h2_exp_reco->Fill(0., exp_ph);
+          // h2_exp_reco_large->Fill(0., exp_ph);
           if (exp_ph > 5.){
             hfail_Etrue_OpDet->Fill(idx_opdet, *E_true);
             hfail_Xtrue_OpDet->Fill(idx_opdet, *x_true);

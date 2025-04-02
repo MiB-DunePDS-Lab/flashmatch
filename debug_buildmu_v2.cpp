@@ -29,9 +29,9 @@
 
 
 // --- HARD CODE HERE ----------------
-int nfile_to_analyze = 127;
+int nfile_to_analyze = 600;
 int max_nfiles = 2000; // Maximum number of files to analyze
-size_t n_opdet = 2; // 480
+size_t n_opdet = 480; // 480
 // size_t n_opdet = 480; // 480
 float light_yield = 20000;
 float arapuca_pde = 0.03;
@@ -43,13 +43,16 @@ double fit_low = 11.;
 double fit_up  = 100.;
 
 double min_visibility = 1.e-60;
-double hit_threshold = 1.5; // Will integrate Poisson [0, hit_threshold]
 
-TString visibility_file_name = "/exp/dune/data/users/dguffant/flash-match/dunevis_fdhd_1x2x6_test_photovisAr.root"; // File with the visibility maps
- std::string ana_folder_name =  "/pnfs/dune/scratch/users/fgalizzi/prod_eminus_seed_2000/ana/"; //ana_nocx/ly27k"; // Folder where the ana files.root ly=27000
+TString visibility_file_name = "./dunevis_fdhd_1x2x6_test.root"; // File with the visibility maps
+ std::string ana_folder_name =  "./ana/"; //ana_nocx/ly27k"; // Folder where the ana files.root ly=27000
+
+// The output file name will contain the fiducial cuts
+double fiducial_cut = 0.; // Fiducial cut in cm (y=z=fiducial_cut)
+double x_cut = 0.; // x cut in cm
 
 
-std::string debug_folder_name = "/pnfs/dune/scratch/users/fgalizzi/prod_eminus_seed_2000/debug/"; 
+std::string debug_folder_name = "./debug/"; 
 //std::string debug_folder_name =  "/pnfs/dune/scratch/users/jdelgadg/debug_nocx/";      //nocx/_yield:27k
 
                                
@@ -58,7 +61,7 @@ std::string debug_folder_name = "/pnfs/dune/scratch/users/fgalizzi/prod_eminus_s
 // -----------------------------------
 
 
-void debug_buildmu2(){
+void debug_buildmu_v2(){
   gStyle->SetPalette(kSunset);
  
   // --- VISIBILITY STUFF -------------------------------------------------------
@@ -76,24 +79,26 @@ void debug_buildmu2(){
   double tpc_min[3] = {coor_dim[0], coor_dim[1], coor_dim[2]}; // x,y,z
   tDimensions->GetEntry(1);
   double tpc_max[3] = {coor_dim[0], coor_dim[1], coor_dim[2]}; // x,y,z
+  double vol_min[3] = {tpc_min[0]+x_cut, tpc_min[1]+fiducial_cut, tpc_min[2]+fiducial_cut};
+  double vol_max[3] = {tpc_max[0]-x_cut, tpc_max[1]-fiducial_cut, tpc_max[2]-fiducial_cut};
   std::vector<int> cryo_to_tpc = GetCryoToTPCMap(hgrid, tpc_min, tpc_max); // Get the mapping from cryostat voxel to TPC voxel
   std::cout << "cryo_to_tpc size " << cryo_to_tpc.size() << std::endl;
 
   double opDet_visDirect[n_opdet];
-  double opDet_visReflct[n_opdet];
+  // double opDet_visReflct[n_opdet];
   const size_t n_entriesmap = photoVisMap->GetEntries();
   std::vector<std::vector<float>> opDet_visMapDirect(n_entriesmap, std::vector<float>(n_opdet, 0.)); // Map to store visibility for each opdet
-  std::vector<std::vector<float>> opDet_visMapReflct(n_entriesmap, std::vector<float>(n_opdet, 0.)); // Map to store visibility for each opdet
+  // std::vector<std::vector<float>> opDet_visMapReflct(n_entriesmap, std::vector<float>(n_opdet, 0.)); // Map to store visibility for each opdet
   TTreeReader VisMapReader(photoVisMap);
   TTreeReaderArray<double> opDet_visDirect_reader(VisMapReader, "opDet_visDirect");
-  TTreeReaderArray<double> opDet_visReflct_reader(VisMapReader, "opDet_visReflct");
+  // TTreeReaderArray<double> opDet_visReflct_reader(VisMapReader, "opDet_visReflct");
   
   std::cout << "Filling maps..." << std::endl;
   int VisMapEntry = 0; int n_VisMapEntries = photoVisMap->GetEntries();
   while (VisMapReader.Next()){
     for (size_t j = 0; j < n_opdet; ++j) {
       opDet_visMapDirect[VisMapEntry][j] = static_cast<float>(opDet_visDirect_reader[j]);
-      opDet_visMapReflct[VisMapEntry][j] = static_cast<float>(opDet_visReflct_reader[j]);
+      // opDet_visMapReflct[VisMapEntry][j] = static_cast<float>(opDet_visReflct_reader[j]);
     }
     VisMapEntry++;
     if (VisMapEntry % 1000 == 0)
@@ -210,8 +215,13 @@ void debug_buildmu2(){
       double exp_ph;
       double exp_ph_min;
       double vertex_coor[3] = {*x_true, *y_true, *z_true};
+      if(!isInFiducialVolume(vertex_coor, vol_min, vol_max, x_cut)){
+        idx_event++;
+        continue;
+      }
       int tpc_index = GetTPCIndex(vertex_coor, hgrid, cryo_to_tpc);
       if (tpc_index < 0 || tpc_index >= int(cryo_to_tpc.size())) {
+        idx_event++;
         std::cout << "Event " << *event_true << " has no valid TPC index!" << std::endl;
         std::cout << vertex_coor[0] << " " << vertex_coor[1] << " " << vertex_coor[2] << std::endl;
         continue; // Skip this entry if TPC index is invalid
@@ -231,14 +241,10 @@ void debug_buildmu2(){
       }
 
 
-      // for(size_t idx_opdet=0; idx_opdet<n_opdet; idx_opdet++){
-      //   std::cout << opdet_detphotons[idx_opdet] << std::endl;
-      // }
-      
-
       // --- LOOP OVER OPDETS -------------------------------------------------
       for(size_t idx_opdet=0; idx_opdet<n_opdet; idx_opdet++){
-        double voxel_vis = opDet_visMapDirect[tpc_index][idx_opdet] + opDet_visMapReflct[tpc_index][idx_opdet];
+        double voxel_vis = opDet_visMapDirect[tpc_index][idx_opdet];// + opDet_visMapReflct[tpc_index][idx_opdet];
+        // if (voxel_vis >= .5) continue; // Skip if visibility is 1
 
         exp_ph = (*E_true)*light_yield*voxel_vis*arapuca_pde;
         exp_ph_min = (*E_true)*light_yield*min_visibility*arapuca_pde;
@@ -246,6 +252,7 @@ void debug_buildmu2(){
         h_Expected_Ophit_OpDet->SetBinContent(idx_opdet, h_Expected_Ophit_OpDet->GetBinContent(idx_opdet)+exp_ph);
         h_Expected_Pe->Fill(exp_ph);
         if (opdet_detphotons[idx_opdet]>0) h2_true_exp->Fill(exp_ph,opdet_detphotons[idx_opdet]);
+        else h2_true_exp->Fill(exp_ph,0.0);
 
         // --- IF RECONSTRUCTED ------------------------------------------------
         auto it = std::find((*OpHitChannels).begin(), (*OpHitChannels).end(), float(idx_opdet));
@@ -268,7 +275,7 @@ void debug_buildmu2(){
         else {
           h2_reco_exp->Fill(exp_ph,0.);
           h2_reco_exp_large->Fill(exp_ph,0.);
-          if (exp_ph > 5.){
+          if (exp_ph > 15.){
             hfail_Etrue_OpDet->Fill(idx_opdet, *E_true);
             hfail_Xtrue_OpDet->Fill(idx_opdet, *x_true);
             hfail_Ytrue_OpDet->Fill(idx_opdet, *y_true);
@@ -285,19 +292,19 @@ void debug_buildmu2(){
 
   // --- EXTRA PLOTS -----------------------------------------------------------
   gStyle->SetOptFit(1111);
-  auto c3 = new TCanvas();
+  // auto c3 = new TCanvas();
   TProfile* h_PeReco_Expected_Prof = h2_reco_exp_large->ProfileX();
   h2_reco_exp_large->Delete();
   TF1* f1 = new TF1("f1", "pol1", fit_low, fit_up);
   h_PeReco_Expected_Prof->Fit("f1", "R");
 
-  auto c4 = new TCanvas();
+  // auto c4 = new TCanvas();
   TProfile* h_PeTrue_Expected_Prof = h2_true_exp->ProfileX();
   TF1* f2 = new TF1("f2", "pol1", fit_low, fit_up);
   h_PeTrue_Expected_Prof->Fit("f2", "R");
   //------------------------------------------------------------------------------------------------------------
    gStyle->SetOptFit(1111);
-   auto c5 = new TCanvas();
+   // auto c5 = new TCanvas();
    TProfile* h_reco_true_Prof = h2_reco_true->ProfileX();
    TF1* f3 = new TF1("f3", "pol1", fit_low, fit_up);
    h_reco_true_Prof->Fit("f3", "R");
@@ -307,18 +314,22 @@ void debug_buildmu2(){
   he_Hit_Prob->SetTitle("Hit Probability;Expected #Pe;Detection Probability");
  
    //----Plotting-----------------------------------------------------------------------------------------------------
-   TCanvas* Reco_Expected = new TCanvas("Reco_Expected","Reco_Expected",0,0,800,600);
-   h2_reco_exp->Draw();
-
-   TCanvas* True_expected = new TCanvas("True_expected","True_expected",0,0,800,600);
-   h2_true_exp->Draw();
-
-   TCanvas* reco_true = new TCanvas("reco_true","reco_true",0,0,800,600);
-   h2_reco_true->Draw();
+   // TCanvas* Reco_Expected = new TCanvas("Reco_Expected","Reco_Expected",0,0,800,600);
+   // h2_reco_exp->Draw();
+   //
+   // TCanvas* True_expected = new TCanvas("True_expected","True_expected",0,0,800,600);
+   // h2_true_exp->Draw();
+   //
+   // TCanvas* reco_true = new TCanvas("reco_true","reco_true",0,0,800,600);
+   // h2_reco_true->Draw();
 
 
   // --- SAVE -------------------------------------------------------------------------------------------------------
-  TFile* out_file = TFile::Open("out_BORRAR_buildmu_nopdet20_nf1_cx_exp20k_reco_true.root", "RECREATE");
+  std::string out_file_name = "debug_exp_true_reco_FullTPC_norefl.root";
+  if (x_cut > 0 || fiducial_cut > 0.0) {
+    out_file_name = Form("debug_exp_true_reco_x%icm_yz%icm_fiducial_norefl.root", int(x_cut), int(fiducial_cut));
+  }
+  TFile* out_file = TFile::Open(out_file_name.c_str(), "RECREATE");
 
   gStyle->SetOptFit(1111);
   hfail_Etrue_OpDet->Write();
