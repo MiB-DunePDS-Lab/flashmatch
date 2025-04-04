@@ -99,9 +99,9 @@ void buildmu(){
   std::cout << "Done filling maps..." << std::endl;
   
   // --- PREPARE OUTPUT -------------------------------------------------------
-  std::string out_file_name = "Mu_Expected.root";
+  std::string out_file_name = "Mu_Expected_FullTPC.root";
   if (fiducial_cut > 0.0) {
-    out_file_name = Form("Mu_Expected_%icm_fiducial_norefl.root", int(fiducial_cut));
+    out_file_name = Form("Mu_Expected_x%icm_yz%icm_fiducial_norefl.root", int(x_cut), int(fiducial_cut));
   }
   TFile* out_file = TFile::Open(out_file_name.c_str(), "RECREATE");
   Int_t ifile = 0;
@@ -293,9 +293,9 @@ void buildmu(){
 
   
   // --- SAVE -----------------------------------------------------------------
-  out_file_name = "out_buildmu_FullTPC_norefl.root";
+  out_file_name = "Buildmu_Plots_FullTPC_norefl.root";
   if (x_cut > 0. || fiducial_cut > 0.0) {
-    out_file_name = Form("out_buildmu_x%icm_yz%icm_fiducial_norefl.root", int(x_cut), int(fiducial_cut));
+    out_file_name = Form("Buildmu_Plots_x%icm_yz%icm_fiducial_norefl.root", int(x_cut), int(fiducial_cut));
   }
   TFile* out_file_hist = TFile::Open(out_file_name.c_str(), "RECREATE");
   out_file_hist->cd();
