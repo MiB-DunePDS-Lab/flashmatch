@@ -1,7 +1,7 @@
-#include "Rtypes.h"
-#include "THnBase.h"
-#include "TProfile.h"
-#include "TString.h"
+// ROOT
+#include <Rtypes.h>
+#include <TProfile.h>
+#include <TString.h>
 #include <TFile.h>
 #include <TF1.h>
 #include <TCanvas.h>
@@ -14,14 +14,13 @@
 #include <TStyle.h>
 #include <TTreeReader.h>
 #include <TTreeReaderArray.h>
-
-#include <cmath>
+// GENERAL
 #include <cstddef>
 #include <iostream>
 #include <string>
 #include <vector>
 #include <filesystem>  // C++17
-
+// UTILS
 #include "DUNEVisUtils.hpp" 
 #include "Utils.hpp"
 
@@ -29,8 +28,8 @@
 
 
 // --- HARD CODE HERE ----------------
-int nfile_to_analyze = 600;
-int max_nfiles = 2000; // Maximum number of files to analyze
+int nfile_to_analyze = 6000;
+int max_nfiles = 8000; // Maximum number of files to analyze
 size_t n_opdet = 480; // 480
 // size_t n_opdet = 480; // 480
 float light_yield = 20000;
@@ -52,7 +51,7 @@ double fiducial_cut = 0.; // Fiducial cut in cm (y=z=fiducial_cut)
 double x_cut = 0.; // x cut in cm
 
 
-std::string debug_folder_name = "./debug/"; 
+std::string debug_folder_name = "./debug_ana/"; 
 //std::string debug_folder_name =  "/pnfs/dune/scratch/users/jdelgadg/debug_nocx/";      //nocx/_yield:27k
 
                                
@@ -125,19 +124,19 @@ void debug_buildmu_v2(){
                                      300, pe_low, pe_up);
 
   TH2D* h2_reco_exp = new TH2D("h2_reco_exp",
-                               Form("%s;%s;%s", "","Expected #Pe","Reco #Pe"),
+                               Form("%s;%s;%s", "Reco vs Expected","Expected #Pe","Reco #Pe"),
                                800, pe_low, pe_up, 800, pe_low, pe_up);
 
   TH2D* h2_true_exp = new TH2D("h2_true_exp",
-                               Form("%s;%s;%s", "","Expected #Pe","True #Pe"),
+                               Form("%s;%s;%s", "True vs Expected","Expected #Pe","True #Pe"),
                                800, pe_low, pe_up, 800, pe_low, pe_up);
 
   TH2D* h2_reco_exp_large = new TH2D("h2_reco_exp_large",
-                               Form("%s;%s;%s", "", "Expected #Pe","Reco #Pe"),
+                               Form("%s;%s;%s", "Reco vs Expected", "Expected #Pe","Reco #Pe"),
                                800*3, pe_low, pe_up*3, 800*3, pe_low, pe_up*3);
-//-----------------------------------------------------------------------------------------------------------------------------
+
   TH2D* h2_reco_true = new TH2D("h2_reco_true",
-                               Form("%s;%s;%s", "","True #Pe","Reco #PE"),
+                               Form("%s;%s;%s", "Reco vs True","True #Pe","Reco #PE"),
                                800, pe_low, pe_up, 800, pe_low, pe_up);
 //------------------------------------------------------------------------------------------------------------------------------------
 
