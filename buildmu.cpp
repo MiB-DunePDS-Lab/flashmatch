@@ -293,9 +293,9 @@ void buildmu(){
 
   
   // --- SAVE -----------------------------------------------------------------
-  out_file_name = "out_buildmu.root";
-  if (fiducial_cut > 0.0) {
-    out_file_name = Form("out_buildmu_%icm_fiducial_norefl.root", int(fiducial_cut));
+  out_file_name = "out_buildmu_FullTPC_norefl.root";
+  if (x_cut > 0. || fiducial_cut > 0.0) {
+    out_file_name = Form("out_buildmu_x%icm_yz%icm_fiducial_norefl.root", int(x_cut), int(fiducial_cut));
   }
   TFile* out_file_hist = TFile::Open(out_file_name.c_str(), "RECREATE");
   out_file_hist->cd();
