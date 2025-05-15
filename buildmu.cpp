@@ -123,20 +123,20 @@ void buildmu(){
   out_tree->Branch("hit", hit, Form("hit[%d]/O", int(n_opdet)));
 
   // --- HISTOS ---------------------------------------------------------------
-  TH1D* h_Expected_Ophit_OpDet = new TH1D("h_Expected_Ophit_OpDet",
-                                          Form("%s;%s;%s","h_Expected_Ophit_OpDet","OpDet","OpHit"),
+  TH1D* h_exp_opdet = new TH1D("h_exp_opdet",
+                                          Form("%s;%s;%s","h_exp_opdet","OpDet","OpHit"),
                                           n_opdet, 0., double(n_opdet));
-  TH1D* h_Reco_Ophit_OpDet     = new TH1D("h_Reco_Ophit_OpDet",
-                                          Form("%s;%s;%s","h_Reco_Ophit_OpDet","OpDet","OpHit"),
+  TH1D* h_reco_opdet     = new TH1D("h_reco_opdet",
+                                          Form("%s;%s;%s","h_reco_opdet","OpDet","OpHit"),
                                           n_opdet, 0., double(n_opdet));
-  h_Reco_Ophit_OpDet->SetLineColor(kRed);
+  h_reco_opdet->SetLineColor(kRed);
 
-  TH1D* h_Expected_Pe = new TH1D("h_Expected_Pe",
-                                 Form("%s;%s;%s","h_Expected_Pe","Expected #Pe","Counts"),
+  TH1D* h_exp = new TH1D("h_exp",
+                                 Form("%s;%s;%s","h_exp","Expected #Pe","Counts"),
                                  300, pe_low, pe_up);
   
-  TH1D* h_Expected_PeReco = new TH1D("h_Expected_PeReco",
-                                     Form("%s;%s;%s","h_Expected_PeReco","Expected #Pe", "Counts"),
+  TH1D* h_expreco = new TH1D("h_expreco",
+                                     Form("%s;%s;%s","h_expreco","Expected #Pe", "Counts"),
                                      300, pe_low, pe_up);
 
   TH2D* h2_exp_reco = new TH2D("h2_exp_reco",
@@ -147,30 +147,30 @@ void buildmu(){
                                Form("%s;%s;%s", "", "Reco #Pe", "Expected #Pe"),
                                800*5, pe_low, pe_up*5, 800*5, pe_low, pe_up*5);
 
-  TH2D* h2_ExpPe_HitTime = new TH2D("h2_HitPe_HitTime", Form("%s;%s;%s", "", "HitTime [ticks]", "Expected #Pe"),
+  TH2D* h2_exp_hittime = new TH2D("h2_HitPe_HitTime", Form("%s;%s;%s", "", "HitTime [ticks]", "Expected #Pe"),
                                     200, -1.0, 5.5,
                                     200, pe_low, pe_up);
 
-  TH2D* hfail_Etrue_OpDet = new TH2D("hfail_Etrue_OpDet",Form("%s;%s;%s","hfail_Etrue_OpDet","OpDet","E_{True} [MeV]"),
+  TH2D* hfail_Etrue_opdet = new TH2D("hfail_Etrue_opdet",Form("%s;%s;%s","hfail_Etrue_opdet","OpDet","E_{True} [MeV]"),
                                      n_opdet, 0., double(n_opdet),
                                      90, 10., 30.);
 
-  TH2D* hfail_Xtrue_OpDet = new TH2D("hfail_Xtrue_OpDet",Form("%s;%s;%s","hfail_Xtrue_OpDet","OpDet","X_{True} [cm]"),
+  TH2D* hfail_Xtrue_opdet = new TH2D("hfail_Xtrue_opdet",Form("%s;%s;%s","hfail_Xtrue_opdet","OpDet","X_{True} [cm]"),
                                      n_opdet, 0., double(n_opdet),
                                      90, -0., 400.);
 
-  TH2D* hfail_Ytrue_OpDet = new TH2D("hfail_Ytrue_OpDet",Form("%s;%s;%s","hfail_Ytrue_OpDet","OpDet","Ytrue"),
+  TH2D* hfail_Ytrue_opdet = new TH2D("hfail_Ytrue_opdet",Form("%s;%s;%s","hfail_Ytrue_opdet","OpDet","Ytrue"),
                                      n_opdet, 0., double(n_opdet),
                                      90, -600., 600.);
 
-  TH2D* hfail_Ztrue_OpDet = new TH2D("hfail_Ztrue_OpDet",Form("%s;%s;%s","hfail_Ztrue_OpDet","OpDet","Ztrue"),
+  TH2D* hfail_Ztrue_opdet = new TH2D("hfail_Ztrue_opdet",Form("%s;%s;%s","hfail_Ztrue_opdet","OpDet","Ztrue"),
                                      n_opdet, 0., double(n_opdet),
                                      90, 0., 1400.);
   
-  TH2D* h_Ghost = new TH2D("h_Ghost",Form("%s;%s;%s", "Reco_Ghost", "Event", "Reco_Ghost"), 
+  TH2D* h_ghost = new TH2D("h_ghost",Form("%s;%s;%s", "Reco_Ghost", "Event", "Reco_Ghost"), 
                            100, 0, 100, 100, 0, 100); //Ghost PE-> Photons we need ignoring.
   
-  TH2D* h_Residual = new TH2D("h_Residual",Form("%s;%s;%s", "", "Reco-True/True", "True"),
+  TH2D* h_residual = new TH2D("h_residual",Form("%s;%s;%s", "", "Reco-True/True", "True"),
                               100, -1000, 1000, 100, 0, 1000);  //*100
   
   // --- DELETES --------------------------------------------------------------
@@ -189,7 +189,7 @@ void buildmu(){
     idx_file++;
     if(!std::filesystem::exists(ana_file_name)) continue;
     
-    std::cout << nfile_analyzed << "- Analyzing file: " << ana_file_name << std::endl;
+    std::cout << nfile_analyzed << "- Analyzing file: " << ana_file_name << "\r" << std::flush;
     nfile_analyzed++;
 
     // Read ana file ----------------------------------------------------------
@@ -234,7 +234,7 @@ void buildmu(){
 
         // Fill histo independent from the reco counterpart -------------------
         vec_Expected_Ophit_OpDet[idx_opdet] += exp_ph;
-        h_Expected_Pe->Fill(exp_ph);
+        h_exp->Fill(exp_ph);
 
         // If recontructed ----------------------------------------------------
         auto it = std::find((*OpHitChannels).begin(), (*OpHitChannels).end(), float(idx_opdet));
@@ -246,20 +246,20 @@ void buildmu(){
           vec_Reco_Ophit_OpDet[idx_opdet] += (*OpHitPes)[idx_hit];
           h2_exp_reco->Fill((*OpHitPes)[idx_hit], exp_ph);
           h2_exp_reco_large->Fill((*OpHitPes)[idx_hit], exp_ph);
-          h2_ExpPe_HitTime->Fill((*OpHitTimes)[idx_hit], exp_ph);
-          h_Expected_PeReco->Fill(exp_ph);
-          h_Residual->Fill(((((*OpHitPes)[idx_hit])-exp_ph)/exp_ph)*100, exp_ph); 
+          h2_exp_hittime->Fill((*OpHitTimes)[idx_hit], exp_ph);
+          h_expreco->Fill(exp_ph);
+          h_residual->Fill(((((*OpHitPes)[idx_hit])-exp_ph)/exp_ph)*100, exp_ph); 
           if(exp_ph == exp_ph_min && (*OpHitPes)[idx_hit] > 0.0 ){    //true==0, ophit>0 per opdet??
-            h_Ghost->Fill(exp_ph, (*OpHitPes)[idx_hit]); 
+            h_ghost->Fill(exp_ph, (*OpHitPes)[idx_hit]); 
           } //Ghost PE 
         } // reconstructed
         // If not reconstructed -----------------------------------------------
         else {
           if (exp_ph > fail_threshold){
-            hfail_Etrue_OpDet->Fill(idx_opdet, *E_true);
-            hfail_Xtrue_OpDet->Fill(idx_opdet, *x_true);
-            hfail_Ytrue_OpDet->Fill(idx_opdet, *y_true);
-            hfail_Ztrue_OpDet->Fill(idx_opdet, *z_true);
+            hfail_Etrue_opdet->Fill(idx_opdet, *E_true);
+            hfail_Xtrue_opdet->Fill(idx_opdet, *x_true);
+            hfail_Ytrue_opdet->Fill(idx_opdet, *y_true);
+            hfail_Ztrue_opdet->Fill(idx_opdet, *z_true);
           }
         } // not reconstructed
       } // end loop over opdets
@@ -269,18 +269,18 @@ void buildmu(){
   } // end loop over ana files
  
   // --- EXTRA PLOTS -----------------------------------------------------------
-  TProfile* h_Expected_PeReco_Prof = h2_exp_reco_large->ProfileX();
+  TProfile* prof_expreco = h2_exp_reco_large->ProfileX();
   TF1* f1 = new TF1("f1", "pol1", fit_low, fit_up);
-  h_Expected_PeReco_Prof->Fit("f1", "R");
+  prof_expreco->Fit("f1", "R");
 
-  TEfficiency* he_Hit_Prob = new TEfficiency(*h_Expected_PeReco,*h_Expected_Pe);
-  he_Hit_Prob->SetTitle("Hit Probability;Expected #Pe;Detection Probability");
-  he_Hit_Prob->SetName("HitProb_ExpPe");
+  TEfficiency* he_hit_prob = new TEfficiency(*h_expreco,*h_exp);
+  he_hit_prob->SetTitle("Hit Probability;Expected #Pe;Detection Probability");
+  he_hit_prob->SetName("he_hit_prob");
   
   // Fill these histogram in a single loop to avoid GetBinContent calls -------
   for(size_t idx_opdet=0; idx_opdet<n_opdet; idx_opdet++){
-    h_Expected_Ophit_OpDet->SetBinContent(idx_opdet, vec_Expected_Ophit_OpDet[idx_opdet]);
-    h_Reco_Ophit_OpDet->SetBinContent(idx_opdet, vec_Reco_Ophit_OpDet[idx_opdet]);
+    h_exp_opdet->SetBinContent(idx_opdet, vec_Expected_Ophit_OpDet[idx_opdet]);
+    h_reco_opdet->SetBinContent(idx_opdet, vec_Reco_Ophit_OpDet[idx_opdet]);
   }
   
 
@@ -288,7 +288,7 @@ void buildmu(){
   out_file->cd();
   out_tree->Write();
   h2_exp_reco->Write();
-  he_Hit_Prob->Write();
+  he_hit_prob->Write();
   h2_exp_reco_large->Write();
 
   
@@ -299,19 +299,19 @@ void buildmu(){
   }
   TFile* out_file_hist = TFile::Open(out_file_name.c_str(), "RECREATE");
   out_file_hist->cd();
-  hfail_Etrue_OpDet->Write();
-  hfail_Xtrue_OpDet->Write();
-  hfail_Ytrue_OpDet->Write();
-  hfail_Ztrue_OpDet->Write();
-  h_Expected_Ophit_OpDet->Write();
-  h_Reco_Ophit_OpDet->Write();
-  h_Expected_Pe->Write();
-  he_Hit_Prob->Write();
-  h_Expected_PeReco->Write();
+  hfail_Etrue_opdet->Write();
+  hfail_Xtrue_opdet->Write();
+  hfail_Ytrue_opdet->Write();
+  hfail_Ztrue_opdet->Write();
+  h_exp_opdet->Write();
+  h_reco_opdet->Write();
+  h_exp->Write();
+  he_hit_prob->Write();
+  h_expreco->Write();
   h2_exp_reco->Write();
   h2_exp_reco_large->Write();
-  h_Expected_PeReco_Prof->Write();
-  h2_ExpPe_HitTime->Write();
+  prof_expreco->Write();
+  h2_exp_hittime->Write();
   out_file_hist->Close();
   out_file->Close();
 
