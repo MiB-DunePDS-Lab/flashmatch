@@ -25,8 +25,8 @@
 
 
 // --- HARD CODE HERE ---------------------------------------------------------
-int rebinning = 4;              
-bool rebin_h2 = false;
+int rebinning = 2;              
+bool rebin_h2 = true;
 
 #define NOPDET 480;
 
@@ -346,14 +346,10 @@ void compute_likelihood(){
         << "%\r" << std::flush;
    
     bool match;
-    if (use_fit_efficiency) flash_matcher(true_event, true_flash, fake_event, fake_flash, f_hit_prob, h2_exp_reco);
-    else flash_matcher(true_event, true_flash, fake_event, fake_flash, he_hit_prob, h2_exp_reco);
+    if (use_fit_efficiency) match = flash_matcher(true_event, true_flash, fake_event, fake_flash, f_hit_prob, h2_exp_reco);
+    else match = flash_matcher(true_event, true_flash, fake_event, fake_flash, he_hit_prob, h2_exp_reco);
 
     if(Fq_fake < Fq) {
-      // std::cout << "-------- " << std::endl;
-      // std::cout << "Fake (E,coor)\t" << fake_event.true_energy << "\t" << "(" << fake_event.vertex_coor[0] << "," << fake_event.vertex_coor[1] << "," << fake_event.vertex_coor[2] << ")" << std::endl;
-      // std::cout << "True (E,coor)\t" << true_event.true_energy << "\t" << "(" << true_event.vertex_coor[0] << "," << true_event.vertex_coor[1] << "," << true_event.vertex_coor[2] << ")" << std::endl;
-      // std::cout << "-------- " << std::endl;
       x_mis.push_back(true_event.vertex_coor[0]);
       y_mis.push_back(true_event.vertex_coor[1]);
       z_mis.push_back(true_event.vertex_coor[2]);
