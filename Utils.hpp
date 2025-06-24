@@ -1,3 +1,4 @@
+#include <cstddef>
 #ifndef NOPDET
 #define NOPDET 480
 #endif // !NOPDET
@@ -15,6 +16,15 @@
 #include "TH2.h"
 #include "TTreeReaderArray.h"
 
+
+// --- PURE UTILITIES ---------------------------------------------------------
+std::vector<int> findIndices(const std::vector<float>& vec, const float& target){
+  std::vector<int> indices;
+  for (size_t i=0; i<vec.size(); i++){
+    if (vec[i]==target) indices.push_back(i);
+  }
+  return indices;
+}
 
 // --- HANDLE VISIBILITIES ----------------------------------------------------
 
