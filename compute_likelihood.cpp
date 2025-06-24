@@ -34,21 +34,21 @@ std::vector<double> compute_loglikelihood_terms(Event& event,
                                                 TGraphErrors* g_logms,
                                                 TGraphErrors* g_sigmas,
                                                 const double& trend_thr){
-  std::vector<double> terms(event.n_opdet);
-  double term = 0., logm = 0., sigma = 0.;
-  for(size_t idx_opdet=0; idx_opdet<event.n_opdet; idx_opdet++){
-    double P_hit_mu = f_ProbHit_ExpPe->Eval(event.mu[idx_opdet]);
+  const size_t n_opdet = event.n_opdet;
+  std::vector<double> terms(n_opdet);
+  double term = 0., logm = 0., sigma = 0., P_hit_mu = 0., reco_pe = 0.;
+  for(size_t idx_opdet=0; idx_opdet<n_opdet; idx_opdet++){
+    P_hit_mu = f_ProbHit_ExpPe->Eval(event.mu[idx_opdet]);
     if(flash.hit[idx_opdet]){
-      double reco_pe = flash.reco_pe[idx_opdet];
+      reco_pe = flash.reco_pe[idx_opdet];
       if (reco_pe > trend_thr){
         f_lognormal->SetParameters(f_logms_trend->Eval(reco_pe), f_sigmas_trend->Eval(reco_pe));
-        term = P_hit_mu*f_lognormal->Eval(reco_pe);
       } else {
         logm  = g_logms->Eval(reco_pe);
         sigma = g_sigmas->Eval(reco_pe);
         f_lognormal->SetParameters(logm, sigma);
-        term = P_hit_mu*f_lognormal->Eval(reco_pe);
       }
+      term = P_hit_mu*f_lognormal->Eval(reco_pe);
     } else {
       term = 1. - P_hit_mu;
     }
@@ -220,114 +220,108 @@ void compute_likelihood(){
   Long64_t nentries = MuRecoTree->GetEntries();
   Double_t old_mu[n_opdet]; Double_t old_true_energy = 0.; Double_t old_vertex_coor[3] = {0.};
 
-  Event fake_event, true_event;
-  Flash true_flash, fake_flash, null_flash;
+  Event true_event, t_event;
+  Flash true_flash, t_flash, null_flash;
+  std::vector<Event> fake_events;
+  std::vector<Flash> fake_flashes;
 
   while(MuRecoReader.Next()){
     // if (entry == 30000) break;
     entry++;
-    if (idx_event==0) {
-      fake_event = Event(*true_energy, vertex_coor, mu);
-      fake_flash = Flash(reco_pe, hit_t, hit);
-      if (fake_flash == null_flash) continue; // The first can't be null
-      idx_event++;
+    if (fake_events.size()<30) {
+      t_event = Event(*true_energy, vertex_coor, mu);
+      t_flash = Flash(reco_pe, hit_t, hit);
+      if (t_flash == null_flash) continue;
+      fake_events.push_back(t_event);
+      fake_flashes.push_back(t_flash);
       continue;
     }
 
-    true_event = Event(*true_energy, vertex_coor, mu);
-    true_flash = Flash(reco_pe, hit_t, hit);
+    t_event = Event(*true_energy, vertex_coor, mu);
+    t_flash = Flash(reco_pe, hit_t, hit);
+    if (t_flash == null_flash) continue;
 
-    if (true_flash == null_flash /*|| fake_flash == null_flash*/) {
-      // std::cout << "E=" << *true_energy << "\tx=" << vertex_coor[0] << "\ty=" << vertex_coor[1] << "\tz=" << vertex_coor[2] << std::endl;
-      // std::cout << "Event " << entry << " is null." << std::endl;
-      continue;
-    }
+    true_flash = fake_flashes[0];
+    true_event = fake_events[0];
+    std::rotate(fake_flashes.begin(), fake_flashes.begin()+1, fake_flashes.end());
+    std::rotate(fake_events.begin(),  fake_events.begin()+1,  fake_events.end());
+    fake_flashes[fake_flashes.size()-1] = t_flash;
+    fake_events[fake_events.size()-1]   = t_event;
 
-    // if (true_event == fake_event) {
-    //   std::cout << "Event " << entry << " is the same as the previous one." << std::endl;
-    // }
-    // if (true_flash == fake_flash) {
-    //   std::cout << "Flash " << entry << " is the same as the previous one." << std::endl;
-    // }
-    // if (null_flash == true_flash){
-    //   std::cout << "Flash " << entry << " is null." << std::endl;
-    // }
+    for (size_t idx_fake=0; idx_fake<fake_events.size(); idx_fake++){
+      Event fake_event = fake_events[idx_fake];
+      Flash fake_flash = fake_flashes[idx_fake];
+      std::vector<double> true_terms, fake_terms;
 
-    bool evt_with_zeros = false;
-
-    std::vector<double> true_terms, fake_terms;
-    if (use_fit_lognormal) {
-      true_terms = compute_loglikelihood_terms(true_event, true_flash, f_hit_prob, f_lognormal, f_logms_trend, f_sigmas_trend, g_logms, g_sigmas, trend_thr);
-      fake_terms = compute_loglikelihood_terms(fake_event, true_flash, f_hit_prob, f_lognormal, f_logms_trend, f_sigmas_trend, g_logms, g_sigmas, trend_thr);
-    }
-    else if (use_fit_efficiency) {
-      true_terms = compute_loglikelihood_terms(true_event, true_flash, f_hit_prob, h2_exp_reco);
-      fake_terms = compute_loglikelihood_terms(fake_event, true_flash, f_hit_prob, h2_exp_reco);
-    } else {
-      true_terms = compute_loglikelihood_terms(true_event, true_flash, he_hit_prob, h2_exp_reco);
-      fake_terms = compute_loglikelihood_terms(fake_event, true_flash, he_hit_prob, h2_exp_reco);
-    }
-
-    double Fq = std::accumulate(true_terms.begin(), true_terms.end(), 0.0);
-    double Fq_fake = std::accumulate(fake_terms.begin(), fake_terms.end(), 0.0);
-
-    for (size_t i = 0; i < n_opdet; ++i) {
-      if (true_flash.hit[i]) {
-        h_term_hit->Fill(true_terms[i]);
-        h_term_hit_fake->Fill(fake_terms[i]);
-      } else {
-        h_term_miss->Fill(true_terms[i]);
-        h_term_miss_fake->Fill(fake_terms[i]);
+      if (use_fit_lognormal) {
+        true_terms = compute_loglikelihood_terms(true_event, true_flash, f_hit_prob, f_lognormal, f_logms_trend, f_sigmas_trend, g_logms, g_sigmas, trend_thr);
+        fake_terms = compute_loglikelihood_terms(fake_event, true_flash, f_hit_prob, f_lognormal, f_logms_trend, f_sigmas_trend, g_logms, g_sigmas, trend_thr);
       }
-    }
+      else if (use_fit_efficiency) {
+        true_terms = compute_loglikelihood_terms(true_event, true_flash, f_hit_prob, h2_exp_reco);
+        fake_terms = compute_loglikelihood_terms(fake_event, true_flash, f_hit_prob, h2_exp_reco);
+      } else {
+        true_terms = compute_loglikelihood_terms(true_event, true_flash, he_hit_prob, h2_exp_reco);
+      fake_terms = compute_loglikelihood_terms(fake_event, true_flash, he_hit_prob, h2_exp_reco);
+      }
 
-    if (max_term < *std::max_element(true_terms.begin(), true_terms.end())) {
-      max_term = *std::max_element(true_terms.begin(), true_terms.end());
-    }
-    if (min_term > *std::min_element(true_terms.begin(), true_terms.end())) {
-      min_term = *std::min_element(true_terms.begin(), true_terms.end());
-    }
-    if (max_term_fake < *std::max_element(fake_terms.begin(), fake_terms.end())) {
-      max_term_fake = *std::max_element(fake_terms.begin(), fake_terms.end());
-    }
-    if (min_term_fake > *std::min_element(fake_terms.begin(), fake_terms.end())) {
+      double Fq = std::accumulate(true_terms.begin(), true_terms.end(), 0.0);
+      double Fq_fake = std::accumulate(fake_terms.begin(), fake_terms.end(), 0.0);
+
+      for (size_t i = 0; i < n_opdet; ++i) {
+        if (true_flash.hit[i]) {
+          h_term_hit->Fill(true_terms[i]);
+          h_term_hit_fake->Fill(fake_terms[i]);
+        } else {
+          h_term_miss->Fill(true_terms[i]);
+          h_term_miss_fake->Fill(fake_terms[i]);
+        }
+      }
+
+      if (max_term < *std::max_element(true_terms.begin(), true_terms.end())) {
+        max_term = *std::max_element(true_terms.begin(), true_terms.end());
+      }
+      if (min_term > *std::min_element(true_terms.begin(), true_terms.end())) {
+        min_term = *std::min_element(true_terms.begin(), true_terms.end());
+      }
+      if (max_term_fake < *std::max_element(fake_terms.begin(), fake_terms.end())) {
+        max_term_fake = *std::max_element(fake_terms.begin(), fake_terms.end());
+      }
+      if (min_term_fake > *std::min_element(fake_terms.begin(), fake_terms.end())) {
       min_term_fake = *std::min_element(fake_terms.begin(), fake_terms.end());
+      }
+
+
+      h_Fq->Fill(Fq);
+      h_Fq_fake->Fill(Fq_fake);
+
+      if(entry % 1000 == 0)
+        std::cout << "Analyzed " << double(entry)/double(nentries)*100. << "% of the events. Fake-matches: " << double(fake_counter)/double(evt_counter)*100. 
+          << " % Mismatches: " << double(mismatch_counter)/double(evt_counter)*100.
+          << " % Combos: " << double(combo_counter)/double(evt_counter)*100.
+          << "%\r" << std::flush;
+
+      bool match;
+      if (use_fit_efficiency) match = flash_matcher(true_event, true_flash, fake_event, fake_flash, f_hit_prob, h2_exp_reco);
+      else match = flash_matcher(true_event, true_flash, fake_event, fake_flash, he_hit_prob, h2_exp_reco);
+
+      if(Fq_fake < Fq) {
+        x_mis.push_back(true_event.vertex_coor[0]);
+        y_mis.push_back(true_event.vertex_coor[1]);
+        z_mis.push_back(true_event.vertex_coor[2]);
+        dx_mis.push_back(true_event.vertex_coor[0] - fake_event.vertex_coor[0]);
+        dy_mis.push_back(true_event.vertex_coor[1] - fake_event.vertex_coor[1]);
+        dz_mis.push_back(true_event.vertex_coor[2] - fake_event.vertex_coor[2]);
+        de_mis.push_back(true_event.true_energy - fake_event.true_energy);
+        fake_counter++;
+      }
+      if(!match) mismatch_counter++;
+      if(Fq_fake < Fq && !match) combo_counter++;
+      evt_counter++;
     }
-
-    // if(evt_with_zeros) evts_with_zeros++;
-    
-    h_Fq->Fill(Fq);
-    h_Fq_fake->Fill(Fq_fake);
-
-    if(entry % 1000 == 0)
-      std::cout << "Analyzed " << double(entry)/double(nentries)*100. << "% of the events. Fake-matches: " << double(fake_counter)/double(evt_counter)*100. 
-        << " % Mismatches: " << double(mismatch_counter)/double(evt_counter)*100.
-        << " % Combos: " << double(combo_counter)/double(evt_counter)*100.
-        << "%\r" << std::flush;
-   
-    bool match;
-    if (use_fit_efficiency) match = flash_matcher(true_event, true_flash, fake_event, fake_flash, f_hit_prob, h2_exp_reco);
-    else match = flash_matcher(true_event, true_flash, fake_event, fake_flash, he_hit_prob, h2_exp_reco);
-
-    if(Fq_fake < Fq) {
-      x_mis.push_back(true_event.vertex_coor[0]);
-      y_mis.push_back(true_event.vertex_coor[1]);
-      z_mis.push_back(true_event.vertex_coor[2]);
-      dx_mis.push_back(true_event.vertex_coor[0] - fake_event.vertex_coor[0]);
-      dy_mis.push_back(true_event.vertex_coor[1] - fake_event.vertex_coor[1]);
-      dz_mis.push_back(true_event.vertex_coor[2] - fake_event.vertex_coor[2]);
-      de_mis.push_back(true_event.true_energy - fake_event.true_energy);
-      fake_counter++;
-    }
-    if(!match) mismatch_counter++;
-    if(Fq_fake < Fq && !match) combo_counter++;
-    evt_counter++;
-    fake_event = true_event;
-    fake_flash = true_flash;
   } // end loop over events
   
   // --- OUTPUT ---------------------------------------------------------------
-
   TH1D* h_x_mis = new TH1D("h_x_mis",Form("%s;%s;%s","h_x_mis","x [cm]","counts"),
                           100, *std::min_element(x_mis.begin(), x_mis.end()), *std::max_element(x_mis.begin(), x_mis.end()));
 
@@ -349,15 +343,15 @@ void compute_likelihood(){
   TH1D* h_de_mis = new TH1D("h_de_mis",Form("%s;%s;%s","h_de_mis","#DeltaE [MeV]","counts"),
                           100, *std::min_element(de_mis.begin(), de_mis.end()), *std::max_element(de_mis.begin(), de_mis.end()));
 
-  TH2D* h2_de_dx_mis = new TH2D("h2_de_dx_mis",Form("%s;%s;%s","h2_de_dx_mis","#Deltax [MeV]","#DeltaE [cm]"),
+  TH2D* h2_de_dx_mis = new TH2D("h2_de_dx_mis",Form("%s;%s;%s","h2_de_dx_mis","#Deltax [cm]","#DeltaE [MeV]"),
                           100, *std::min_element(dx_mis.begin(), dx_mis.end()), *std::max_element(dx_mis.begin(), dx_mis.end()),
                           100, *std::min_element(de_mis.begin(), de_mis.end()), *std::max_element(de_mis.begin(), de_mis.end()));
 
-  TH2D* h2_de_dy_mis = new TH2D("h2_de_dy_mis",Form("%s;%s;%s","h2_de_dy_mis","#Deltay [MeV]","#DeltaE [cm]"),
+  TH2D* h2_de_dy_mis = new TH2D("h2_de_dy_mis",Form("%s;%s;%s","h2_de_dy_mis","#Deltay [cm]","#DeltaE [MeV]"),
                           100, *std::min_element(dy_mis.begin(), dy_mis.end()), *std::max_element(dy_mis.begin(), dy_mis.end()),
                           100, *std::min_element(de_mis.begin(), de_mis.end()), *std::max_element(de_mis.begin(), de_mis.end()));
 
-  TH2D* h2_de_dz_mis = new TH2D("h2_de_dz_mis",Form("%s;%s;%s","h2_de_dz_mis","#Deltaz [MeV]","#DeltaE [cm]"),
+  TH2D* h2_de_dz_mis = new TH2D("h2_de_dz_mis",Form("%s;%s;%s","h2_de_dz_mis","#Deltaz [cm]","#DeltaE [MeV]"),
                           100, *std::min_element(dz_mis.begin(), dz_mis.end()), *std::max_element(dz_mis.begin(), dz_mis.end()),
                           100, *std::min_element(de_mis.begin(), de_mis.end()), *std::max_element(de_mis.begin(), de_mis.end()));
 
@@ -383,16 +377,6 @@ void compute_likelihood(){
             << "\ndE dx correlation:\t" << h2_de_dx_mis->GetCorrelationFactor()
             << "\ndE dy correlation:\t" << h2_de_dy_mis->GetCorrelationFactor()
             << "\ndE dz correlation:\t" << h2_de_dz_mis->GetCorrelationFactor()
-            // << "\nZeros terms: " << zeros_term << "/" << evt_counter*n_opdet
-            // << "\nZeros terms %: " << zeros_term/double(evt_counter*n_opdet)*100.
-            // << "\nFake Zeros terms: " << zeros_term_fake << "/" << evt_counter*n_opdet
-            // << "\nFake Zeros terms %: " << zeros_term_fake/double(evt_counter*n_opdet)*100.
-            // << "\nEvents with zeros: " << evts_with_zeros << "/" << evt_counter
-            // << "\nEvents with zeros %: " << evts_with_zeros/double(evt_counter)*100.
-            // << "\nMin term: " << min_term
-            // << "\nMax term: " << max_term
-            // << "\nMin term fake: " << min_term_fake
-            // << "\nMax term fake: " << max_term_fake
             << std::endl;  
 
   g_logms->Write();
