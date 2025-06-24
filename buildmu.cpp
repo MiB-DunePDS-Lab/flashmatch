@@ -236,23 +236,26 @@ void buildmu(){
         vec_Expected_Ophit_OpDet[idx_opdet] += exp_ph;
         h_exp->Fill(exp_ph);
 
+        const auto matches = findIndices(*OpHitChannels, float(idx_opdet));
+        // double reco_pe = 0;
         // If recontructed ----------------------------------------------------
-        auto it = std::find((*OpHitChannels).begin(), (*OpHitChannels).end(), float(idx_opdet));
-        size_t idx_hit = std::distance((*OpHitChannels).begin(), it);
-        if(idx_hit != (*OpHitChannels).size()){
-          reco_pe[idx_opdet] = (*OpHitPes)[idx_hit];
-          hit_t[idx_opdet] = (*OpHitTimes)[idx_hit];
+        if (!matches.empty()){
+          for (const auto& idx_hit : matches){
+            reco_pe[idx_opdet] += (*OpHitPes)[idx_hit];
+            h2_exp_hittime->Fill((*OpHitTimes)[idx_hit], exp_ph);
+          }
+          hit_t[idx_opdet] = (*OpHitTimes)[matches[0]];
           hit[idx_opdet] = true;
-          vec_Reco_Ophit_OpDet[idx_opdet] += (*OpHitPes)[idx_hit];
-          h2_exp_reco->Fill((*OpHitPes)[idx_hit], exp_ph);
-          h2_exp_reco_large->Fill((*OpHitPes)[idx_hit], exp_ph);
-          h2_exp_hittime->Fill((*OpHitTimes)[idx_hit], exp_ph);
+          vec_Reco_Ophit_OpDet[idx_opdet] += reco_pe[idx_opdet];
+          h2_exp_reco->Fill(reco_pe[idx_opdet], exp_ph);
+          h2_exp_reco_large->Fill(reco_pe[idx_opdet], exp_ph);
+          h2_exp_hittime->Fill(reco_pe[idx_opdet], exp_ph);
           h_expreco->Fill(exp_ph);
-          h_residual->Fill(((((*OpHitPes)[idx_hit])-exp_ph)/exp_ph)*100, exp_ph); 
-          if(exp_ph == exp_ph_min && (*OpHitPes)[idx_hit] > 0.0 ){    //true==0, ophit>0 per opdet??
-            h_ghost->Fill(exp_ph, (*OpHitPes)[idx_hit]); 
+          h_residual->Fill((((reco_pe[idx_opdet])-exp_ph)/exp_ph)*100, exp_ph); 
+          if(exp_ph == exp_ph_min && reco_pe[idx_opdet] > 0.0 ){    //true==0, ophit>0 per opdet??
+            h_ghost->Fill(exp_ph, reco_pe[idx_opdet]); 
           } //Ghost PE 
-        } // reconstructed
+        }
         // If not reconstructed -----------------------------------------------
         else {
           if (exp_ph > fail_threshold){
@@ -274,7 +277,7 @@ void buildmu(){
   prof_expreco->Fit("f1", "R");
 
   TEfficiency* he_hit_prob = new TEfficiency(*h_expreco,*h_exp);
-  he_hit_prob->SetTitle("Hit Probability;Expected #Pe;Detection Probability");
+  he_hit_prob->SetTitle("Hit Probability;Expected #Pe;Reconstruction Probability");
   he_hit_prob->SetName("he_hit_prob");
   
   // Fill these histogram in a single loop to avoid GetBinContent calls -------
