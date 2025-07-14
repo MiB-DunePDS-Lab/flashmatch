@@ -30,20 +30,6 @@
 #include "TTreeReaderValue.h"
 #include "Utils.hpp"
 
-TGraphErrors* th2d_to_tgraph_mpv(TH2D* h2, const std::string& name){
-  TGraphErrors* g = new TGraphErrors();
-  g->SetName(name.c_str()); g->SetTitle(h2->GetTitle());
-  for(int idx_x=0; idx_x<=h2->GetNbinsX()+1; idx_x++){
-    TH1D* h1_proj = h2->ProjectionY("h1_proj", idx_x, idx_x);
-    if(h1_proj->GetEntries() > 0){
-      double mpv = h1_proj->GetXaxis()->GetBinCenter(h1_proj->GetMaximumBin());
-      double err = h1_proj->GetBinWidth(0); // CHECK THIS
-      g->SetPoint(idx_x, h2->GetXaxis()->GetBinCenter(idx_x), mpv);
-      g->SetPointError(idx_x, 0., err);
-    }
-  }
-  return g; 
-}
 
 
 // --- HARD CODE HERE ----------------
@@ -62,7 +48,7 @@ double fit_up  = 100.;
 
 double min_visibility = 1.e-60;
 
-TString visibility_file_name = "./dunevis_fdhd_1x2x6_test.root"; // File with the visibility maps
+TString visibility_file_name = "./dunevis_fdhd_1x2x6_test_float.root"; // File with the visibility maps
 std::string ana_folder_name =  "./ophitfinder_edep_debug/ana/";
 
 
@@ -86,7 +72,6 @@ void debug_buildmu_v2(){
  
   // --- VISIBILITY STUFF -------------------------------------------------------
   TFile* visibility_file = TFile::Open(visibility_file_name, "READ");
-  TTree* photoVisMap = (TTree*)visibility_file->Get("photovisAr/photoVisMap");
   TH1D* hgrid[3] = {nullptr};
   hgrid[0] = (TH1D*)visibility_file->Get("photovisAr/hgrid0");
   hgrid[1] = (TH1D*)visibility_file->Get("photovisAr/hgrid1");
@@ -104,28 +89,16 @@ void debug_buildmu_v2(){
   std::vector<int> cryo_to_tpc = GetCryoToTPCMap(hgrid, tpc_min, tpc_max); // Get the mapping from cryostat voxel to TPC voxel
   std::cout << "cryo_to_tpc size " << cryo_to_tpc.size() << std::endl;
 
-  double opDet_visDirect[n_opdet];
-  // double opDet_visReflct[n_opdet];
+  TTree* photoVisMap = (TTree*)visibility_file->Get("photovisAr/photoVisMap");
   const size_t n_entriesmap = photoVisMap->GetEntries();
-  std::vector<std::vector<float>> opDet_visMapDirect(n_entriesmap, std::vector<float>(n_opdet, 0.)); // Map to store visibility for each opdet
-  // std::vector<std::vector<float>> opDet_visMapReflct(n_entriesmap, std::vector<float>(n_opdet, 0.)); // Map to store visibility for each opdet
-  TTreeReader VisMapReader(photoVisMap);
-  TTreeReaderArray<double> opDet_visDirect_reader(VisMapReader, "opDet_visDirect");
-  // TTreeReaderArray<double> opDet_visReflct_reader(VisMapReader, "opDet_visReflct");
-  
-  std::cout << "Filling maps..." << std::endl;
-  int VisMapEntry = 0; int n_VisMapEntries = photoVisMap->GetEntries();
-  while (VisMapReader.Next()){
-    for (size_t j = 0; j < n_opdet; ++j) {
-      opDet_visMapDirect[VisMapEntry][j] = static_cast<float>(opDet_visDirect_reader[j]);
-      // opDet_visMapReflct[VisMapEntry][j] = static_cast<float>(opDet_visReflct_reader[j]);
-    }
-    VisMapEntry++;
-    if (VisMapEntry % 1000 == 0)
-      std::cout << VisMapEntry << " / " << n_VisMapEntries << "\r" << std::flush;
+  float opDet_visDirect[n_opdet];
+  photoVisMap->SetBranchAddress("opDet_visDirect", &opDet_visDirect);
+  std::vector<std::vector<float>> opDet_visMapDirect(n_entriesmap, std::vector<float>(n_opdet, 0.));
+
+  for (size_t VisMapEntry = 0; VisMapEntry < n_entriesmap; ++VisMapEntry) {
+    photoVisMap->GetEntry(VisMapEntry);
+    std::memcpy(opDet_visMapDirect[VisMapEntry].data(), &opDet_visDirect[0], n_opdet * sizeof(float));
   }
-  std::cout << "Done filling maps..." << std::endl;
-  
 
   // --- HISTOS ----------------------------------------------------------------
   TH1D* h_exp_opdet  = new TH1D("h_exp_opdet",
@@ -151,6 +124,30 @@ void debug_buildmu_v2(){
   TH1D* h_truereco = new TH1D("h_truereco",
                             Form("%s;%s;%s","h_truereco","True #Pe", "Counts"),
                             300, pe_low, pe_up);
+
+  TH1D* h_YtrueYrecodiff = new TH1D("h_YtrueYrecodiff",
+                            Form("%s;%s;%s","h_YtrueYrecodiff","Y_{True}-Y_{Reco} [cm]", "Counts"),
+                            200, -600, 600);
+
+  TH1D* h_ZtrueZrecodiff = new TH1D("h_ZtrueZrecodiff",
+                            Form("%s;%s;%s","h_ZtrueZrecodiff","Z_{True}-Z_{Reco} [cm]", "Counts"),
+                            140, 0, 1400);
+
+  TH2D* h2_Ydiff_iev = new TH2D("h2_Ydiff_iev",
+                                 Form("%s;%s;%s", "h2_Ydiff_iev", "Y_{True}-Y_{Reco} [cm]", "Event"),
+                                 200, -600, 600, 100, 0, 100);
+
+  TH2D* h2_Yrue_Yreco = new TH2D("h2_Yrue_Yreco",
+                                 Form("%s;%s;%s", "h2_Yrue_Yreco", "Y_{Reco} [cm]", "Y_{True} [cm]"),
+                                 100, -650, 650, 100, -650, 650);
+
+  TH2D* h2_Ztrue_Zreco = new TH2D("h2_Ztrue_Zreco",
+                                  Form("%s;%s;%s", "h2_Ztrue_Zreco", "Z_{Reco} [cm]", "Z_{True} [cm]"),
+                                  100, -50, 1450, 100, -50, 1450);
+
+  TH2D* h2_Ydiff_Zdiff = new TH2D("h2_Ydiff_Zdiff",
+                                 Form("%s;%s;%s", "h2_Ydiff_Zdiff", "Y_{True}-Y_{Reco} [cm]", "Z_{True}-Z_{Reco} [cm]"),
+                                 200, -650, 650, 200, -650, 650);
 
   TH2D* h2_edep_etrue = new TH2D("h2_edep_etrue",
                                  Form("%s;%s;%s", "h2_edep_etrue", "E_{true} [MeV]", "E_{dep} [MeV]"),
@@ -281,6 +278,8 @@ void debug_buildmu_v2(){
     TTree* solar_tree = static_cast<TTree*>(ana_file->Get("solarnuana/SolarNuAnaTree"));
     TTreeReader solar_treeReader(solar_tree);
     TTreeReaderValue<float> Charge(solar_treeReader, "Charge");
+    TTreeReaderValue<float> RecoY(solar_treeReader, "RecoY");
+    TTreeReaderValue<float> RecoZ(solar_treeReader, "RecoZ");
 
     TTree* config_tree = static_cast<TTree*>(ana_file->Get("solarnuana/ConfigTree"));
     // TTreeReader configReader(config_tree);
@@ -334,9 +333,20 @@ void debug_buildmu_v2(){
         entry_debug++;
         t_DetectedPhotons->GetEntry(entry_debug);
       }
+      
+      if (solar_treeReader.GetCurrentEntry() != treeReader.GetCurrentEntry()) {
+        std::cerr << "Error: MCTree and SolarNuAnaTree entries do not match!" << std::endl;
+        continue; // Skip this entry if entries do not match
+      }
 
       double EDep = std::accumulate((*EDepList).begin(), (*EDepList).end(), 0.0);
       // double EDep = *std::max_element((*EDepList).begin(), (*EDepList).end());
+      h_YtrueYrecodiff->Fill((*y_true)-(*RecoY));
+      h_ZtrueZrecodiff->Fill((*z_true)-(*RecoZ));
+      h2_Ydiff_iev->Fill((*y_true)-(*RecoY), idx_event);
+      h2_Yrue_Yreco->Fill((*RecoY), (*y_true));
+      h2_Ztrue_Zreco->Fill((*RecoZ), (*z_true));
+      h2_Ydiff_Zdiff->Fill((*y_true)-(*RecoY), (*z_true)-(*RecoZ));
       h2_edep_etrue->Fill(*E_true, EDep);
       h2_charge_etrue->Fill(*E_true, (*Charge));
       h2_chargeperenergytrue_drifttime->Fill((*x_true)/drift_velocity, (*Charge)/(*E_true));
@@ -530,6 +540,11 @@ void debug_buildmu_v2(){
   h_exp_opdet->Write();
   h2_charge_etrue->Write();
   h_reco_opdet->Write();
+  h_YtrueYrecodiff->Write();
+  h_ZtrueZrecodiff->Write();
+  h2_Yrue_Yreco->Write();
+  h2_Ztrue_Zreco->Write();
+  h2_Ydiff_Zdiff->Write();
   h_exp->Write();
   he_expreco->Write();
   he_truereco->Write();
