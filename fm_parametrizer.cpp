@@ -1,0 +1,125 @@
+#include "TGraphErrors.h"
+#include <TFile.h>
+#include <TH1D.h>
+#include <TH2D.h>
+#include <TF1.h>
+#include <TEfficiency.h>
+
+#include "Utils.hpp"
+
+const double trend_fit_low = 25.;
+const double trend_fit_up  = 80.;
+const bool rebin_h2 = 0; // Rebin h2_exp_reco_norm
+const int rebinning = 2; // Rebinning factor for h2_exp_reco_norm
+
+void fm_parametrizer(){
+  TFile* distribution_file = TFile::Open("fm_distributions.root", "READ");
+  TH2D* h2_exp_reco = static_cast<TH2D*>(distribution_file->Get("h2_exp_reco"));
+  TEfficiency* he_hit_prob = static_cast<TEfficiency*>(distribution_file->Get("he_hit_prob"));
+  // distribution_file->Close();
+  
+  TF1* f_reco_prob_fit = new TF1("f_hit_prob_fit", sigmoid_sigmoid_erf, 0., 40., 6); // To fit only in a short range
+  f_reco_prob_fit->SetParameters(7, 1.7, -5.8, 7., 2.8, 1.2);
+  he_hit_prob->Fit(f_reco_prob_fit, "R");
+  TF1* f_reco_prob = new TF1("f_reco_prob", sigmoid_sigmoid_erf, 0., 5000., 6); // Extend the function range
+  f_reco_prob->SetParameters(f_reco_prob_fit->GetParameters());
+
+  TF1* f_lognormal = new TF1("f_lognormal", "ROOT::Math::lognormal_pdf(x,[0],[1])", 0, 2000);
+  f_lognormal->SetParNames("log(m)", "#sigma");
+  f_lognormal->SetNpx(3000);
+  std::vector<double> logms, sigmas, reco_pes;
+  std::vector<double> err_logms, err_sigmas, err_reco_pes;
+  
+  TFile* out_file = TFile::Open("fm_parametrizer.root", "RECREATE");
+  out_file->mkdir("projections");
+  out_file->cd("projections");
+  
+  if (rebin_h2) h2_exp_reco->Rebin2D(rebinning, rebinning);
+  for(int idx_y=1; idx_y<=h2_exp_reco->GetNbinsY(); idx_y++){
+    std::cout << idx_y << "/" << h2_exp_reco->GetNbinsY() << "\r" << std::flush;
+    TH1D* h1_proj = h2_exp_reco->ProjectionX("h1_proj", idx_y, idx_y);
+    double h1_proj_integral = h1_proj->Integral();
+    
+    if(h1_proj_integral > 0.){
+      h1_proj->Scale(1./(h1_proj_integral*h1_proj->GetBinWidth(1)));
+      
+      double mean = h1_proj->GetBinCenter(h1_proj->GetMaximumBin());
+      double stddev = h1_proj->GetStdDev();
+
+      f_lognormal->SetParameters(log(mean), 0.25);
+      f_lognormal->SetParLimits(0, log(mean-5*stddev), log(mean+5*stddev));
+
+      TFitResultPtr fit_res = nullptr;
+      if (h1_proj->GetEntries() > 400) fit_res = h1_proj->Fit(f_lognormal, "Q", "", std::max(0.,mean-5*stddev), mean+5*stddev);
+      h1_proj->SetName(Form("h1_proj_%i_pe", (int)h2_exp_reco->GetYaxis()->GetBinCenter(idx_y)));
+      h1_proj->Write();
+
+      for(int idx_x=1; idx_x<=h2_exp_reco->GetNbinsX(); idx_x++){
+        h2_exp_reco->SetBinContent(idx_x, idx_y, h1_proj->GetBinContent(idx_x));
+      } 
+
+      
+      double reco = h2_exp_reco->GetXaxis()->GetBinCenter(idx_y);
+      // if (reco > 400) break; // Stop if reco is greater than 40
+      if (reco > 3 && h1_proj->GetEntries() > 400 && fit_res==0){
+        reco_pes.push_back(reco);                        err_reco_pes.push_back(0);
+        logms.push_back(f_lognormal->GetParameter(0));   err_logms.push_back(f_lognormal->GetParError(0));
+        sigmas.push_back(f_lognormal->GetParameter(1));  err_sigmas.push_back(f_lognormal->GetParError(1));
+      }
+    }
+  } // handle h2_exp_reco and fit lognormal_pdf
+
+
+  // --- TGRAPHS ------------------------------------------------
+  TGraphErrors* g_logms = new TGraphErrors(logms.size(), &reco_pes[0], &logms[0], &err_reco_pes[0], &err_logms[0]);
+  g_logms->SetTitle("log(MPV) vs reco_pe;#Reco Pe;log(MPV)");
+  g_logms->SetName("g_logms");
+  TGraphErrors* g_sigmas = new TGraphErrors(sigmas.size(), &reco_pes[0], &sigmas[0], &err_reco_pes[0], &err_sigmas[0]);
+  g_sigmas->SetTitle("#sigma vs reco_pe;#Reco Pe;#sigma");
+  g_sigmas->SetName("g_sigmas");
+
+  // Fit the parameter trends
+  TF1* f_logms_trend = new TF1("f_logms_trend", "[0]+log(x)", 0., 2000.);
+  f_logms_trend->SetParNames("const");
+  f_logms_trend->SetParameters(.5);
+  f_logms_trend->SetNpx(2000);
+
+  g_logms->Fit(f_logms_trend, "", "", trend_fit_low, trend_fit_up);
+
+  TF1* f_sigmas_trend = new TF1("f_sigmas_trend", "[3]+[2]*exp(-[1]*(x-[0]))", 0., 2000.);
+  f_sigmas_trend->SetParNames("x0", "lambda", "A", "const");
+  f_sigmas_trend->SetParameters(5., 0.1, 1., 0.2);
+  f_sigmas_trend->SetNpx(2000);
+
+  g_sigmas->Fit(f_sigmas_trend, "", "", trend_fit_low, trend_fit_up);
+
+  TTree* parametrizer_tree = new TTree("parametrizer_tree", "parametrizer_tree");
+  float log_const, sigma_x0, sigma_lambda, sigma_A, sigma_const;
+  parametrizer_tree->Branch("log_const", &log_const, "log_const/F");
+  parametrizer_tree->Branch("sigma_x0", &sigma_x0, "sigma_x0/F");
+  parametrizer_tree->Branch("sigma_lambda", &sigma_lambda, "sigma_lambda/F");
+  parametrizer_tree->Branch("sigma_A", &sigma_A, "sigma_A/F");
+  parametrizer_tree->Branch("sigma_const", &sigma_const, "sigma_const/F");
+  log_const = f_logms_trend->GetParameter(0);
+  sigma_x0 = f_sigmas_trend->GetParameter(0);
+  sigma_lambda = f_sigmas_trend->GetParameter(1);
+  sigma_A = f_sigmas_trend->GetParameter(2);
+  sigma_const = f_sigmas_trend->GetParameter(3);
+  parametrizer_tree->Fill();
+
+
+  out_file->cd();
+  parametrizer_tree->Write();
+  he_hit_prob->Write();
+  h2_exp_reco->Write();
+  f_reco_prob->Write();
+  f_lognormal->Write();
+  f_logms_trend->Write();
+  f_sigmas_trend->Write();
+  g_logms->Write();
+  g_sigmas->Write();
+  out_file->Close();
+  
+
+  return;
+}
