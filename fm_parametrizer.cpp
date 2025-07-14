@@ -19,9 +19,11 @@ void fm_parametrizer(){
   // distribution_file->Close();
   
   TF1* f_reco_prob_fit = new TF1("f_hit_prob_fit", sigmoid_sigmoid_erf, 0., 40., 6); // To fit only in a short range
+  f_reco_prob_fit->SetNpx(3000);
   f_reco_prob_fit->SetParameters(7, 1.7, -5.8, 7., 2.8, 1.2);
   he_hit_prob->Fit(f_reco_prob_fit, "R");
-  TF1* f_reco_prob = new TF1("f_reco_prob", sigmoid_sigmoid_erf, 0., 5000., 6); // Extend the function range
+  TF1* f_reco_prob = new TF1("f_reco_prob", sigmoid_sigmoid_erf, 0., 2000., 6); // Extend the function range
+  f_reco_prob->SetNpx(3000);
   f_reco_prob->SetParameters(f_reco_prob_fit->GetParameters());
 
   TF1* f_lognormal = new TF1("f_lognormal", "ROOT::Math::lognormal_pdf(x,[0],[1])", 0, 2000);
@@ -82,14 +84,14 @@ void fm_parametrizer(){
   TF1* f_logms_trend = new TF1("f_logms_trend", "[0]+log(x)", 0., 2000.);
   f_logms_trend->SetParNames("const");
   f_logms_trend->SetParameters(.5);
-  f_logms_trend->SetNpx(2000);
+  f_logms_trend->SetNpx(3000);
 
   g_logms->Fit(f_logms_trend, "", "", trend_fit_low, trend_fit_up);
 
   TF1* f_sigmas_trend = new TF1("f_sigmas_trend", "[3]+[2]*exp(-[1]*(x-[0]))", 0., 2000.);
   f_sigmas_trend->SetParNames("x0", "lambda", "A", "const");
   f_sigmas_trend->SetParameters(5., 0.1, 1., 0.2);
-  f_sigmas_trend->SetNpx(2000);
+  f_sigmas_trend->SetNpx(3000);
 
   g_sigmas->Fit(f_sigmas_trend, "", "", trend_fit_low, trend_fit_up);
 
