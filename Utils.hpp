@@ -1,9 +1,10 @@
-#include <cstddef>
+#include "TGraphErrors.h"
 #ifndef NOPDET
 #define NOPDET 480
 #endif // !NOPDET
 
 // GENERAL
+#include <cstddef>
 #include <vector>
 #include <iostream>
 #include <numeric>
@@ -26,12 +27,83 @@ std::vector<int> findIndices(const std::vector<float>& vec, const float& target)
   return indices;
 }
 
+template <typename T>
+int findIndex(const std::vector<T>* vec, const T& target){
+  auto it = std::find(vec->begin(), vec->end(), target);
+  if (it != vec->end()) {
+    return std::distance(vec->begin(), it);
+  } else {
+    return -1; // Not found
+  }
+}
+
+TGraphErrors* th2d_to_tgraph_mpv(TH2D* h2, const std::string& name){
+  TGraphErrors* g = new TGraphErrors();
+  g->SetName(name.c_str()); g->SetTitle(h2->GetTitle());
+  for(int idx_x=0; idx_x<=h2->GetNbinsX()+1; idx_x++){
+    TH1D* h1_proj = h2->ProjectionY("h1_proj", idx_x, idx_x);
+    if(h1_proj->GetEntries() > 0){
+      double mpv = h1_proj->GetXaxis()->GetBinCenter(h1_proj->GetMaximumBin());
+      double err = h1_proj->GetBinWidth(0); // CHECK THIS
+      g->SetPoint(idx_x, h2->GetXaxis()->GetBinCenter(idx_x), mpv);
+      g->SetPointError(idx_x, 0., err);
+    }
+  }
+  return g; 
+}
+
+template <typename Tuple, std::size_t... Is>
+double get_by_index(const Tuple& tuple, std::size_t index, std::index_sequence<Is...>){
+  double result = 0.;
+  ((Is == index ? (result = static_cast<double>(std::get<Is>(tuple))) : 0.), ...);
+  return result;
+}
+
+template <typename... T>
+double get_maximum_from_tuples(const std::vector<std::tuple<T...>>& tuples,
+                               size_t column){
+  auto seq = std::index_sequence_for<T...>{};
+
+  auto max_it = std::max_element(tuples.begin(), tuples.end(),
+                                 [column, seq](const auto& a, const auto& b){
+                                   return get_by_index(a, column, seq) < get_by_index(b, column, seq);
+                                 });
+
+  return get_by_index(*max_it, column, seq);
+}
+
+template <typename... T>
+double get_minimum_from_tuples(const std::vector<std::tuple<T...>>& tuples,
+                               size_t column){
+  auto seq = std::index_sequence_for<T...>{};
+
+  auto min_it = std::min_element(tuples.begin(), tuples.end(),
+                                 [column, seq](const auto& a, const auto& b){
+                                   return get_by_index(a, column, seq) < get_by_index(b, column, seq);
+                                 });
+
+  return get_by_index(*min_it, column, seq);
+}
+
+
+float give_me_Ereco(float calib_c, float calib_slope, float corr_lambda,
+                    float time_tpc, float charge){
+  
+  float q_corr = charge * exp(time_tpc * corr_lambda);
+  float E_reco = (q_corr - calib_c) / calib_slope;
+  
+  return E_reco;
+}
+
+
+
 // --- HANDLE VISIBILITIES ----------------------------------------------------
 
 // From the hgridX histograms created by the PhotonVisibilityExpoort_module.cc, it returns
 // a vector where the z-th + y-th * hgrid[2]->GetNbinsX() + x-th * hgrid[2]->GetNbinsX()*hgrid[1]->GetNbinsX()
 // entry value is the number of the photoVisMap entry corresponding to the x,y,z coordinates.
-std::vector<int> GetCryoToTPCMap(TH1D* hgrid[3], double tpc_min[3], double tpc_max[3]){
+template <typename T>
+std::vector<int> GetCryoToTPCMap(TH1D* hgrid[3], T tpc_min[3], T tpc_max[3]){
   size_t n_total_entries = hgrid[0]->GetNbinsX() * hgrid[1]->GetNbinsX() * hgrid[2]->GetNbinsX();
   std::vector<int> total_to_tpc(n_total_entries, -1);
   int tpc_entry = 0;
@@ -55,14 +127,16 @@ std::vector<int> GetCryoToTPCMap(TH1D* hgrid[3], double tpc_min[3], double tpc_m
   return total_to_tpc;
 }
 
-bool isInFiducialVolume(double vertex_coor[3], double vol_min[3], double vol_max[3], double x_cut){
+template <typename T>
+bool isInFiducialVolume(T vertex_coor[3], T vol_min[3], T vol_max[3], T x_cut){
   return (vertex_coor[0] > vol_min[0] && vertex_coor[0] < vol_max[0] &&
           vertex_coor[1] > vol_min[1] && vertex_coor[1] < vol_max[1] &&
           vertex_coor[2] > vol_min[2] && vertex_coor[2] < vol_max[2] &&
           abs(vertex_coor[0]) > x_cut);
 }
 
-int GetTPCIndex(double vertex_coor[3], TH1D* hgrid[3], std::vector<int>& total_to_tpc){
+template <typename T>
+int GetTPCIndex(T vertex_coor[3], TH1D* hgrid[3], std::vector<int>& total_to_tpc){
   int bin_x = hgrid[0]->FindBin(vertex_coor[0]);
   int bin_y = hgrid[1]->FindBin(vertex_coor[1]);
   int bin_z = hgrid[2]->FindBin(vertex_coor[2]);
