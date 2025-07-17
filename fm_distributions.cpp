@@ -231,7 +231,6 @@ void fm_distributions(){
     float TrueY = 0.; float RecoY = 0.; float RecoZ = 0.;
     solarnu_tree->SetBranchAddress("Event", &sn_iev);
     solarnu_tree->SetBranchAddress("Flag", &sn_flag);
-    solarnu_tree->SetBranchAddress("SignalParticleY", &TrueY);
     solarnu_tree->SetBranchAddress("RecoY", &RecoY);
     solarnu_tree->SetBranchAddress("RecoZ", &RecoZ);
     
@@ -245,18 +244,14 @@ void fm_distributions(){
     mctruth_tree->SetBranchAddress("Event", &mc_iev);
     mctruth_tree->SetBranchAddress("Flag", &mc_flag);
     mctruth_tree->SetBranchAddress("SignalParticleX", &TrueX);
+    mctruth_tree->SetBranchAddress("SignalParticleY", &TrueY);
     mctruth_tree->SetBranchAddress("SignalParticleZ", &TrueZ);
     mctruth_tree->SetBranchAddress("SignalParticleE", &TrueE);
     mctruth_tree->SetBranchAddress("TSignalElectronDepList", &EDepElectron);
     mctruth_tree->SetBranchAddress("OpHitPE", &OpHitPes);
     mctruth_tree->SetBranchAddress("OpHitChannel", &OpHitChannels);
     mctruth_tree->SetBranchAddress("OpHitTime", &OpHitTimes);
-    
-    // chck if the two treen have the same number of entries
-    // if (mctruth_tree->GetEntries() != solarnu_tree->GetEntries()) {
-    //   std::cerr << "Error: MCTree and SolarNuAnaTree have different number of entries!" << std::endl;
-    //   continue; // Skip this file if the trees do not match
-    // }
+
 
     int sn_entries = solarnu_tree->GetEntries(); int this_sn_entry = 0;
     int mc_entries = mctruth_tree->GetEntries(); int this_mc_entry = 0;
@@ -265,30 +260,25 @@ void fm_distributions(){
     for (int mc_entry = 0; mc_entry < mc_entries; mc_entry++) {
       mctruth_tree->GetEntry(mc_entry); solarnu_tree->GetEntry(sn_entry);
       if (sn_iev != mc_iev) std::cout << "out of sync " << std::endl;
-      // std::cout << sn_iev << " " << mc_iev << " -- " << sn_flag << " " << mc_flag << std::endl;
-      syncro_trees(mctruth_tree, solarnu_tree, mc_iev, sn_iev, mc_entry, sn_entry, mc_entries, sn_entries);
-      // std::cout << sn_iev << " " << mc_iev << " // " << sn_flag << " " << mc_flag << std::endl;
-      // std::cout << sn_iev << " " << mc_iev << " || " << sn_flag << " " << mc_flag << std::endl;
 
+      syncro_trees(mctruth_tree, solarnu_tree, mc_iev, sn_iev, mc_entry, sn_entry, mc_entries, sn_entries);
       sn_entry++;
-      // continue;
 
       y_reco = RecoY; z_reco = RecoZ;
       x_true = TrueX; y_true = TrueY; z_true = TrueZ; e_true = TrueE;
-      vertex_coor[0] = TrueX; vertex_coor[1] = TrueY; vertex_coor[2] = TrueZ;
-      if(!isInFiducialVolume(vertex_coor, vol_min, vol_max, x_cut)) continue;
       
 
-
-
-
+      vertex_coor[0] = TrueX; vertex_coor[1] = TrueY; vertex_coor[2] = TrueZ;
+      if(!isInFiducialVolume(vertex_coor, vol_min, vol_max, x_cut)) continue;
       int tpc_index = GetTPCIndex(vertex_coor, hgrid, cryo_to_tpc);
       if (tpc_index < 0 || tpc_index >= int(cryo_to_tpc.size())) {
         std::cout << "Event " << iev << " is not in the fiducial volume!" << std::endl;
         std::cout << vertex_coor[0] << " " << vertex_coor[1] << " " << vertex_coor[2] << std::endl;
         continue; // Skip this entry if TPC index is invalid
       }
-      vertex_coor[0] = TrueX; vertex_coor[1] = RecoY; vertex_coor[2] = TrueZ;
+
+
+      vertex_coor[0] = TrueX; vertex_coor[1] = RecoY; vertex_coor[2] = RecoZ;
       if(!isInFiducialVolume(vertex_coor, vol_min, vol_max, x_cut)) continue;
       tpc_index = GetTPCIndex(vertex_coor, hgrid, cryo_to_tpc);
       if (tpc_index < 0 || tpc_index >= int(cryo_to_tpc.size())) {
@@ -323,8 +313,6 @@ void fm_distributions(){
         float reco_pe = 0.; float exp_ph = 0.;
         exp_ph = e_reco*LY_times_PDE*voxel_vis; // Expected photons
         if(exp_ph==0.) exp_ph = e_reco*LY_times_PDE*min_visibility; 
-        // exp_ph = e_true*LY_times_PDE*voxel_vis; // Expected photons
-        // if(exp_ph==0.) exp_ph = e_true*LY_times_PDE*min_visibility; 
 
         auto it = channel_hit_map.find(idx_opdet);
         // If recontructed ----------------------------------------------------
@@ -336,15 +324,13 @@ void fm_distributions(){
           flash_channels->push_back(idx_opdet);
           flash_times->push_back(ophit_times[it->second[0]]);
 
-          if (abs(y_reco-y_true) < 30 && abs(z_reco-z_true) < 30){
-            h_exp->Fill(exp_ph);
-            h_expreco->Fill(exp_ph);
-            h2_exp_reco->Fill(reco_pe, exp_ph);
-          }
+          h_exp->Fill(exp_ph);
+          h_expreco->Fill(exp_ph);
+          h2_exp_reco->Fill(reco_pe, exp_ph);
         }
         else {
-          if (abs(y_reco-y_true) < 30 && abs(z_reco-z_true) < 30) h_exp->Fill(exp_ph);
-        } // if not reconsTd
+          h_exp->Fill(exp_ph);
+        } // if not reconstructed
         reco_pes->push_back(reco_pe); exp_phs->push_back(exp_ph);
       } // opdet loop
       tpc_pds_tree->Fill();
