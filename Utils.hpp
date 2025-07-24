@@ -1,3 +1,6 @@
+#ifndef UTILS_HPP
+#define UTILS_HPP
+
 #include "TGraphErrors.h"
 #ifndef NOPDET
 #define NOPDET 480
@@ -384,3 +387,6 @@ double langaufun(double *x, double *par) {
 double langaus2(double* x, double* par){
   return langaufun(x, &par[0]) * sigmoid_sigmoid_erf(x, &par[4]);
 }
+
+
+#endif // UTILS_HPP
