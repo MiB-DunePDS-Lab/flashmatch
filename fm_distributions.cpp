@@ -2,12 +2,15 @@
 #include "TFile.h"
 #include "TROOT.h"
 #include "TString.h"
+#include "TEntryList.h"
 #include "TTree.h"
 #include <cstddef>
 #include <filesystem>
 #include <string>
+#include <map>
 #include <unordered_map>
 #include <vector>
+#include <set>
 
 #include "Utils.hpp"
 
@@ -67,10 +70,75 @@ bool syncro_trees(TTree* mc_tree, TTree* sn_tree,
   }
 }
 
+template <typename T>
+std::vector<T> treeBranch_to_vector(TTree* tree, const std::string& branch_name) {
+  std::vector<T> vec;
+  tree->Draw(branch_name.c_str(), "", "goff");
+  int n = tree->GetSelectedRows();
+  double* array = tree->GetV1();
+
+  vec.reserve(n);
+  for (int i = 0; i < n; ++i) {
+    vec.push_back(static_cast<T>(array[i]));
+  }
+
+  return vec;
+}
+
+
+template <typename T>
+void select_unique_elements_in_vector(std::vector<T>& vec) {
+  std::map<T, size_t> count_map;
+  for (const auto& elem : vec) {
+    count_map[elem]++;
+  }
+
+  std::vector<T> unique_elements;
+  for (const auto& [key, value] : count_map) {
+    if (value == 1) {
+      unique_elements.push_back(key);
+    }
+  }
+
+  vec = unique_elements;
+  return;
+}
+
+
+template <typename T>
+std::vector<T> vector_intersection(const std::vector<T>& a, const std::vector<T>& b) {
+  std::set<T> set_a(a.begin(), a.end());
+  std::set<T> result_set;
+
+  for (const T& elem : b) {
+    if (set_a.count(elem)) result_set.insert(elem);
+  }
+
+  return std::vector<T>(result_set.begin(), result_set.end());
+}
+
+template <typename T>
+TEntryList* get_entry_list(TTree* tree, const std::string& branch_name, const std::vector<T>& vec) {
+  TEntryList* entry_list = new TEntryList();
+
+  T value;
+  tree->SetBranchAddress(branch_name.c_str(), &value);
+  Long64_t n_entries = tree->GetEntries();
+
+  for (long long i = 0; i < n_entries; ++i) {
+    tree->GetEntry(i);
+    if (std::find(vec.begin(), vec.end(), value) != vec.end()) {
+      entry_list->Enter(i);
+    }
+  }
+
+  return entry_list;
+}
+
 // --- HARD CODE HERE ----------------
 const int max_nfiles = 8000; // Maximum number of files to analyze
 int n_opdet = 480; // Number of optical detectors
-const std::string ana_folder_name =  "./ophitfinder_edep_debug/ana/";
+const std::string ana_folder_name =  "./nue_cc/";
 const std::string base_ana_file_name = "solar_ana_dune10kt_1x2x6_hist_";
 const std::string visibility_file_name = "dunevis_fdhd_1x2x6_test_float.root"; // File with the visibility maps
 const float pe_low = 0.;     // Plotting lower limit
@@ -218,7 +286,8 @@ void fm_distributions(){
   int idx_file = 0;
   while(nfile_analyzed < nfile_to_analyze){
     // --- ANA STUFF -----------------------------------------------------------
-    std::string ana_file_name = std::string(ana_folder_name+base_ana_file_name+idx_file+".root"); 
+    // std::string ana_file_name = std::string(ana_folder_name+base_ana_file_name+idx_file+".root"); 
+    std::string ana_file_name = "./nue_cc/SolarNuAna_marley.root";
     // Check whether both files exist
     idx_file++;
     if(!std::filesystem::exists(ana_file_name)) continue;
@@ -257,11 +326,25 @@ void fm_distributions(){
     int mc_entries = mctruth_tree->GetEntries(); int this_mc_entry = 0;
     bool out_of_sync = false; bool end_tree = false; int this_sn_iev = 0;
     int sn_entry = 0;
-    for (int mc_entry = 0; mc_entry < mc_entries; mc_entry++) {
-      mctruth_tree->GetEntry(mc_entry); solarnu_tree->GetEntry(sn_entry);
-      if (sn_iev != mc_iev) std::cout << "out of sync " << std::endl;
 
-      syncro_trees(mctruth_tree, solarnu_tree, mc_iev, sn_iev, mc_entry, sn_entry, mc_entries, sn_entries);
+    std::vector<int> mc_events = treeBranch_to_vector<int>(mctruth_tree, "Flag");
+    std::vector<int> sn_events = treeBranch_to_vector<int>(solarnu_tree, "Flag");
+    select_unique_elements_in_vector(sn_events);
+    std::vector<int> common_events = vector_intersection(mc_events, sn_events);
+    TEntryList* mc_entry_list = get_entry_list<int>(mctruth_tree, "Flag", common_events);
+    TEntryList* sn_entry_list = get_entry_list<int>(solarnu_tree, "Flag", common_events);
+    mctruth_tree->SetEntryList(mc_entry_list);
+    solarnu_tree->SetEntryList(sn_entry_list);
+    sn_entries = sn_entry_list->GetN();
+    mc_entries = mc_entry_list->GetN();
+
+
+    for (int mc_entry = 0; mc_entry < mc_entries; mc_entry++) {
+      mctruth_tree->GetEntry(mc_entry_list->GetEntry(mc_entry));
+      solarnu_tree->GetEntry(sn_entry_list->GetEntry(sn_entry));
+      if (sn_iev != mc_iev) std::cout << mc_entry << " out of sync " << std::endl;
+
+      // syncro_trees(mctruth_tree, solarnu_tree, mc_iev, sn_iev, mc_entry, sn_entry, mc_entries, sn_entries);
       sn_entry++;
 
       y_reco = RecoY; z_reco = RecoZ;
