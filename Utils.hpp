@@ -22,7 +22,7 @@
 
 
 // --- PURE UTILITIES ---------------------------------------------------------
-std::vector<int> findIndices(const std::vector<float>& vec, const float& target){
+inline std::vector<int> findIndices(const std::vector<float>& vec, const float& target){
   std::vector<int> indices;
   for (size_t i=0; i<vec.size(); i++){
     if (vec[i]==target) indices.push_back(i);
@@ -40,7 +40,7 @@ int findIndex(const std::vector<T>* vec, const T& target){
   }
 }
 
-TGraphErrors* th2d_to_tgraph_mpv(TH2D* h2, const std::string& name){
+inline TGraphErrors* th2d_to_tgraph_mpv(TH2D* h2, const std::string& name){
   TGraphErrors* g = new TGraphErrors();
   g->SetName(name.c_str()); g->SetTitle(h2->GetTitle());
   for(int idx_x=0; idx_x<=h2->GetNbinsX()+1; idx_x++){
@@ -89,7 +89,7 @@ double get_minimum_from_tuples(const std::vector<std::tuple<T...>>& tuples,
 }
 
 
-float give_me_Ereco(float calib_c, float calib_slope, float corr_lambda,
+inline float give_me_Ereco(float calib_c, float calib_slope, float corr_lambda,
                     float time_tpc, float charge){
   
   float q_corr = charge * exp(time_tpc * corr_lambda);

@@ -157,17 +157,8 @@ class LikelihoodComputer{
           } else {
             f_lognormal->SetParameters(g_logms->Eval(reco_pe), g_sigmas->Eval(reco_pe));
           }
-          if (P_hit_mu==0){
-            std::cerr << "Warning: P_hit_mu is zero for exp_ph = " << exp_ph << " and reco_pe = " << reco_pe << std::endl;
-          }
-          if (h2_exp_reco->GetBinContent(h2_exp_reco->FindBin(reco_pe, exp_ph))==0){
-            std::cerr << "Warning: h2_exp_reco bin content is zero for reco_pe = " << reco_pe << " and exp_ph = " << exp_ph << std::endl;
-          }
           log_likelihood += log(P_hit_mu*h2_exp_reco->GetBinContent(h2_exp_reco->FindBin(reco_pe, exp_ph)));
         } else {
-          if (1.-P_hit_mu == 0){
-            std::cerr << "Warning: " << idx_opdet << "  1-P_hit_mu is negative for exp_ph = " << exp_ph << std::endl;
-          }
           log_likelihood += log(1. - P_hit_mu);
         }
       }
