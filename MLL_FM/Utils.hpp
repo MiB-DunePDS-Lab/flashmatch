@@ -11,6 +11,8 @@
 #include <vector>
 #include <iostream>
 #include <numeric>
+#include <fstream>
+#include <nlohmann/json.hpp>
 
 // ROOT
 #include <TF1.h>
@@ -20,25 +22,40 @@
 #include "TH2.h"
 #include "TTreeReaderArray.h"
 
+using json = nlohmann::json;
+namespace fs = std::filesystem;
+
 
 // --- PURE UTILITIES ---------------------------------------------------------
-inline std::vector<int> findIndices(const std::vector<float>& vec, const float& target){
-  std::vector<int> indices;
-  for (size_t i=0; i<vec.size(); i++){
-    if (vec[i]==target) indices.push_back(i);
+#include <vector>
+#include <string>
+#include <filesystem>
+
+inline std::vector<std::string> get_list_of_files_in_folder(std::string folder_name, std::string ends_with){
+  std::vector<std::string> result;
+
+  if (!fs::exists(folder_name) || !fs::is_directory(folder_name))
+    return result;
+
+  for (const auto& entry : fs::directory_iterator(folder_name))
+  {
+    if (!entry.is_regular_file())
+      continue;
+
+    std::string filename = entry.path().filename().string();
+
+    if (filename.size() >= ends_with.size() &&
+      filename.compare(filename.size() - ends_with.size(),
+                       ends_with.size(),
+                       ends_with) == 0)
+    {
+      result.push_back(filename);
+    }
   }
-  return indices;
+
+  return result;
 }
 
-template <typename T>
-int findIndex(const std::vector<T>* vec, const T& target){
-  auto it = std::find(vec->begin(), vec->end(), target);
-  if (it != vec->end()) {
-    return std::distance(vec->begin(), it);
-  } else {
-    return -1; // Not found
-  }
-}
 
 inline TGraphErrors* th2d_to_tgraph_mpv(TH2D* h2, const std::string& name){
   TGraphErrors* g = new TGraphErrors();
@@ -90,9 +107,9 @@ double get_minimum_from_tuples(const std::vector<std::tuple<T...>>& tuples,
 
 
 inline float give_me_Ereco(float calib_c, float calib_slope, float corr_lambda,
-                    float time_tpc, float charge){
+                    float dt, float charge){
   
-  float q_corr = charge * exp(time_tpc * corr_lambda);
+  float q_corr = charge * exp(dt * corr_lambda);
   float E_reco = (q_corr - calib_c) / calib_slope;
   
   return E_reco;
@@ -227,10 +244,10 @@ class Flash {
     }
 };
 
-std::vector<double> compute_loglikelihood_terms(Event& event,
-                                                Flash& flash,
-                                                TEfficiency* he_ProbHit_ExpPe,
-                                                TH2D* h2_exp_reco) {
+inline std::vector<double> compute_loglikelihood_terms(Event& event,
+                                                       Flash& flash,
+                                                       TEfficiency* he_ProbHit_ExpPe,
+                                                       TH2D* h2_exp_reco) {
   std::vector<double> terms(event.n_opdet);
   double term = 0.;
   for(size_t idx_opdet=0; idx_opdet<event.n_opdet; idx_opdet++){
@@ -245,10 +262,10 @@ std::vector<double> compute_loglikelihood_terms(Event& event,
   return terms;
 }
 
-std::vector<double> compute_loglikelihood_terms(Event& event,
-                                                Flash& flash,
-                                                TF1*  f_ProbHit_ExpPe,
-                                                TH2D* h2_exp_reco) {
+inline std::vector<double> compute_loglikelihood_terms(Event& event,
+                                                       Flash& flash,
+                                                       TF1*  f_ProbHit_ExpPe,
+                                                       TH2D* h2_exp_reco) {
   std::vector<double> terms(event.n_opdet);
   double term = 0.;
   for(size_t idx_opdet=0; idx_opdet<event.n_opdet; idx_opdet++){
@@ -298,95 +315,75 @@ bool flash_matcher(Event& event_a, Flash& flash_a, Event& event_b, Flash& flash_
 }
 
 // --- FIT FUNCTIONS ----------------------------------------------------------
-
-// My crystalball function: alpha, n, sigma, mu
-// double my_crystalball(double* x, double* par){
-//   return ROOT::Math::crystalball_pdf(x[0], par[0], par[1], par[2], par[3]);
-// }
-
 // Sigmoid function
-double sigmoid(double* x, double* par){
+inline double sigmoid(double* x, double* par){
   return 1 / (1 + exp(-(x[0]-par[0])/par[1]));
 }
 
 // Positive error function (0 to 1)
-double positive_erf(double* x, double* par){
+inline double positive_erf(double* x, double* par){
   return 0.5*(1.+TMath::Erf((x[0]-par[0])/par[1]));
 }
 
 // Sigmoid times positive_erf
-double sigmoid_erf(double* x, double* par){
+inline double sigmoid_erf(double* x, double* par){
   return sigmoid(x, &par[0]) * positive_erf(x, &par[2]);
 }
 
 // Sigmoid times sigmoid times positive_erf 
-double sigmoid_sigmoid_erf(double* x, double* par){
+inline double sigmoid_sigmoid_erf(double* x, double* par){
   return sigmoid(x, &par[0]) * sigmoid(x, &par[2]) * positive_erf(x, &par[4]);
 }
 
-// Sigmoid times my_crystalball
-// double sigmoid_crystalball(double* x, double* par){
-//   return par[0] * sigmoid(x, &par[1]) * my_crystalball(x, &par[3]);
-// }
 
-double langaufun(double *x, double *par) {
- 
-   //Fit parameters:
-   //par[0]=Width (scale) parameter of Landau density
-   //par[1]=Most Probable (MP, location) parameter of Landau density
-   //par[2]=Total area (integral -inf to inf, normalization constant)
-   //par[3]=Width (sigma) of convoluted Gaussian function
-   //
-   //In the Landau distribution (represented by the CERNLIB approximation),
-   //the maximum is located at x=-0.22278298 with the location parameter=0.
-   //This shift is corrected within this function, so that the actual
-   //maximum is identical to the MP parameter.
- 
-      // Numeric constants
-      double invsq2pi = 0.3989422804014;   // (2 pi)^(-1/2)
-      double mpshift  = 0.;       // Landau maximum location
- 
-      // Control constants
-      double np = 500.0;      // number of convolution steps
-      double sc =   5.0;      // convolution extends to +-sc Gaussian sigmas
- 
-      // Variables
-      double xx;
-      double mpc;
-      double fland;
-      double sum = 0.0;
-      double xlow,xupp;
-      double step;
-      double i;
- 
- 
-      // MP shift correction
-      mpc = par[1] - mpshift * par[0];
- 
-      // Range of convolution integral
-      xlow = x[0] - sc * par[3];
-      xupp = x[0] + sc * par[3];
- 
-      step = (xupp-xlow) / np;
- 
-      // Convolution integral of Landau and Gaussian by sum
-      for(i=1.0; i<=np/2; i++) {
-         xx = xlow + (i-.5) * step;
-         fland = TMath::Landau(xx,mpc,par[0]) / par[0];
-         sum += fland * TMath::Gaus(x[0],xx,par[3]);
- 
-         xx = xupp - (i-.5) * step;
-         fland = TMath::Landau(xx,mpc,par[0]) / par[0];
-         sum += fland * TMath::Gaus(x[0],xx,par[3]);
-      }
- 
-      return (par[2] * step * sum * invsq2pi / par[3]);
+struct MLLcconfigs{
+  std::string input_dir;
+  std::string visibility_file_name;
+  int max_nfiles;
+  double fit_Qcorr_Etrue_low;
+  double fit_Qcorr_Etrue_up;
+  float pe_low;
+  float pe_up;
+  float light_yield;
+  float arapuca_pde;
+  float min_visibility;
+  float yz_fiducial_cut;
+  float x_fiducial_cut;
+  // bool verbose;
+  double fit_trend_low;
+  double fit_trend_up;
+  bool rebin_h2; // Rebin h2_exp_reco_norm
+  int rebinning; // Rebinning factor for h2_exp_reco_norm
+};
+
+inline MLLcconfigs load_ana_config(const std::string &filename){
+  std::ifstream file(filename);
+  if (!file) {
+    throw std::runtime_error("Could not open config file: " + filename);
+  }
+
+  json j;
+  file >> j;
+  MLLcconfigs config;
+  config.input_dir            = j.at("input_dir").get<std::string>();
+  config.visibility_file_name = j.at("visibility_file_name").get<std::string>();
+  config.fit_Qcorr_Etrue_low  = j.at("fit_Qcorr_Etrue_low").get<double>();
+  config.fit_Qcorr_Etrue_up   = j.at("fit_Qcorr_Etrue_up").get<double>();
+  config.max_nfiles           = j.at("max_nfiles").get<int>();
+  config.pe_low               = j.at("pe_low").get<float>();
+  config.pe_up                = j.at("pe_up").get<float>();
+  config.light_yield          = j.at("light_yield").get<float>();
+  config.arapuca_pde          = j.at("arapuca_pde").get<float>();
+  config.min_visibility       = j.at("min_visibility").get<float>();
+  config.yz_fiducial_cut      = j.at("yz_fiducial_cut").get<float>();
+  config.x_fiducial_cut       = j.at("x_fiducial_cut").get<float>();
+  // config.verbose              = j.at("verbose").get<bool>();
+  config.fit_trend_low        = j.at("fit_trend_low").get<double>();
+  config.fit_trend_up         = j.at("fit_trend_up").get<double>();
+  config.rebin_h2             = j.at("rebin_h2").get<bool>();
+  config.rebinning            = j.at("rebinning").get<int>();
+
+  return config;
 }
-
-// langaufun * sigmoid_sigmoid_erf
-double langaus2(double* x, double* par){
-  return langaufun(x, &par[0]) * sigmoid_sigmoid_erf(x, &par[4]);
-}
-
 
 #endif // UTILS_HPP

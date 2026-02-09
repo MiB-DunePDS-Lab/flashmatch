@@ -1,3 +1,6 @@
+
+#define NOPDET 480;
+
 // GENERAL
 #include <algorithm>
 #include <cmath>
@@ -17,174 +20,64 @@
 #include <TF1.h>
 #include <TTreeReaderValue.h>
 #include <Math/MinimizerOptions.h>
+#include "TGraphErrors.h"
 // UTILS
 #include "Utils.hpp"
 
 
+std::vector<double> compute_loglikelihood_terms(Event& event,
+                                                Flash& flash,
+                                                TF1*  f_ProbHit_ExpPe,
+                                                TF1* f_lognormal,
+                                                TF1*  f_logms_trend,
+                                                TF1*  f_sigmas_trend,
+                                                TGraphErrors* g_logms,
+                                                TGraphErrors* g_sigmas,
+                                                const double& trend_thr){
+  const size_t n_opdet = event.n_opdet;
+  std::vector<double> terms(n_opdet);
+  double term = 0., logm = 0., sigma = 0., P_hit_mu = 0., reco_pe = 0.;
+  for(size_t idx_opdet=0; idx_opdet<n_opdet; idx_opdet++){
+    P_hit_mu = f_ProbHit_ExpPe->Eval(event.mu[idx_opdet]);
+    if(flash.hit[idx_opdet]){
+      reco_pe = flash.reco_pe[idx_opdet];
+      if (reco_pe > trend_thr){
+        f_lognormal->SetParameters(f_logms_trend->Eval(reco_pe), f_sigmas_trend->Eval(reco_pe));
+      } else {
+        logm  = g_logms->Eval(reco_pe);
+        sigma = g_sigmas->Eval(reco_pe);
+        f_lognormal->SetParameters(logm, sigma);
+      }
+      term = P_hit_mu*f_lognormal->Eval(reco_pe);
+    } else {
+      term = 1. - P_hit_mu;
+    }
+    terms[idx_opdet] = -log(term);
+  }
+  return terms;
+}
 
 
 
 // --- HARD CODE HERE ---------------------------------------------------------
-int rebinning = 4;              
-bool rebin_h2 = false;
+int rebinning = 2;              
+bool rebin_h2 = true;
 
-#define NOPDET 480;
 
 const size_t n_opdet = NOPDET;
 
 bool ignore_noreco_terms = false;
 
 bool use_fit_efficiency = true; // Use fit of TEfficiency "he_hit_prob" or the TEfficiency itself
+bool use_fit_lognormal = true; // Use fit of lognormal estrapolation
+
+double trend_thr = 25.;
 
 TString buildmu_output  = "./Mu_Expected_x30cm_yz50cm_fiducial_norefl.root";
 TString output_filename = "./Compute_Likelihood_fiducial_norefl.root";
 // ----------------------------------------------------------------------------
 
-class Event {
-  public:
-    static constexpr size_t n_opdet = NOPDET;
-    double true_energy;
-    double vertex_coor[3];
-    double mu[n_opdet];
 
-    Event& operator=(const Event& other) {
-      if (this != &other) {
-        true_energy = other.true_energy;
-        std::copy(std::begin(other.vertex_coor), std::end(other.vertex_coor), vertex_coor);
-        std::copy(std::begin(other.mu), std::end(other.mu), mu);
-      }
-      return *this;
-    }
-
-    bool operator==(const Event& other) {
-      return (true_energy == other.true_energy &&
-              std::equal(std::begin(vertex_coor), std::end(vertex_coor), std::begin(other.vertex_coor)) &&
-              std::equal(std::begin(mu), std::end(mu), std::begin(other.mu)));
-    }
-
-  Event() : true_energy(0), vertex_coor{0, 0, 0}, mu{0} {}
-  
-  Event(const Double_t true_energy,
-        const TTreeReaderArray<Double_t>& vertex_coor,
-        const TTreeReaderArray<Double_t>& mu) {
-    this->true_energy = true_energy;
-    for (size_t i = 0; i < 3; ++i) {
-      this->vertex_coor[i] = vertex_coor[i];
-    }
-    for (size_t i = 0; i < n_opdet; ++i) {
-      this->mu[i] = mu[i];
-    }
-  }
-};
-
-class Flash {
-  public:
-    static constexpr size_t n_opdet = NOPDET;
-    double reco_pe[n_opdet];
-    double hit_t[n_opdet];
-    bool hit[n_opdet];
-
-    Flash& operator=(const Flash& other) {
-      if (this != &other) {
-        std::copy(std::begin(other.reco_pe), std::end(other.reco_pe), reco_pe);
-        std::copy(std::begin(other.hit_t), std::end(other.hit_t), hit_t);
-        std::copy(std::begin(other.hit), std::end(other.hit), hit);
-      }
-      return *this;
-    }
-
-    bool operator==(const Flash& other) {
-      for (size_t i = 0; i < n_opdet; ++i) {
-        if (reco_pe[i] != other.reco_pe[i] || hit_t[i] != other.hit_t[i] || hit[i] != other.hit[i]) {
-          return false;
-        }
-      }
-      return true;
-    }
-
-    Flash() : reco_pe{0}, hit_t{0}, hit{false} {}
-    Flash(const TTreeReaderArray<Double_t>& reco_pe,
-          const TTreeReaderArray<Double_t>& hit_t,
-          const TTreeReaderArray<Bool_t>& hit) {
-      for (size_t i = 0; i < n_opdet; ++i) {
-        this->reco_pe[i] = reco_pe[i];
-        this->hit_t[i] = hit_t[i];
-        this->hit[i] = hit[i];
-      }
-    }
-};
-
-std::vector<double> compute_loglikelihood_terms(Event& event,
-                                                Flash& flash,
-                                                TEfficiency* he_ProbHit_ExpPe,
-                                                TH2D* h2_exp_reco) {
-  std::vector<double> terms(event.n_opdet);
-  double term = 0.;
-  for(size_t idx_opdet=0; idx_opdet<event.n_opdet; idx_opdet++){
-    double P_hit_mu = he_ProbHit_ExpPe->GetEfficiency(he_ProbHit_ExpPe->FindFixBin(event.mu[idx_opdet]));
-    if(flash.hit[idx_opdet]){
-      term = P_hit_mu*h2_exp_reco->GetBinContent(h2_exp_reco->FindBin(flash.reco_pe[idx_opdet], event.mu[idx_opdet]));
-    } else {
-      term = 1. - P_hit_mu;
-      if (ignore_noreco_terms) term = 1.;
-    }
-    terms[idx_opdet] = -log(term);
-  }
-  return terms;
-}
-
-std::vector<double> compute_loglikelihood_terms(Event& event,
-                                                Flash& flash,
-                                                TF1*  f_ProbHit_ExpPe,
-                                                TH2D* h2_exp_reco) {
-  std::vector<double> terms(event.n_opdet);
-  double term = 0.;
-  for(size_t idx_opdet=0; idx_opdet<event.n_opdet; idx_opdet++){
-    double P_hit_mu = f_ProbHit_ExpPe->Eval(event.mu[idx_opdet]);
-    if(flash.hit[idx_opdet]){
-      term = P_hit_mu*h2_exp_reco->GetBinContent(h2_exp_reco->FindBin(flash.reco_pe[idx_opdet], event.mu[idx_opdet]));
-    } else {
-      term = 1. - P_hit_mu;
-      if (ignore_noreco_terms) term = 1.;
-    }
-    terms[idx_opdet] = -log(term);
-  }
-  return terms;
-}
-
-template<typename T>
-bool flash_matcher(Event& event_a, Flash& flash_a, Event& event_b, Flash& flash_b, T he_ProbHit_ExpPe, TH2D* h2_exp_reco) {
-  std::vector<double> ea_fa_vector = compute_loglikelihood_terms(event_a, flash_a, he_ProbHit_ExpPe, h2_exp_reco); 
-  double ea_fa = std::accumulate(ea_fa_vector.begin(), ea_fa_vector.end(), 0.0);
-  std::vector<double> eb_fb_vector = compute_loglikelihood_terms(event_b, flash_b, he_ProbHit_ExpPe, h2_exp_reco);
-  double eb_fb = std::accumulate(eb_fb_vector.begin(), eb_fb_vector.end(), 0.0);
-  std::vector<double> ea_fb_vector = compute_loglikelihood_terms(event_a, flash_b, he_ProbHit_ExpPe, h2_exp_reco);
-  double ea_fb = std::accumulate(ea_fb_vector.begin(), ea_fb_vector.end(), 0.0);
-  std::vector<double> eb_fa_vector = compute_loglikelihood_terms(event_b, flash_a, he_ProbHit_ExpPe, h2_exp_reco);
-  double eb_fa = std::accumulate(eb_fa_vector.begin(), eb_fa_vector.end(), 0.0);
- 
-  std::vector<double> es_fs = {ea_fa, eb_fb, ea_fb, eb_fa};
-  double inf = std::numeric_limits<double>::infinity();
-
-  if ( std::count_if(es_fs.begin(), es_fs.end(), [&](double x) { return x == inf; }) == 1 ) {
-    if (ea_fb == inf || eb_fa == inf) {
-      return true;
-    } else {
-      return false;
-    }
-  }
-  else {
-    double min = std::min({ea_fa, eb_fb, ea_fb, eb_fa});
-    if (std::count_if(es_fs.begin(), es_fs.end(), [&](double x) { return x == min; }) > 1) {
-      std::cout << "they are equal to " << min << std::endl;
-    }
-    if (ea_fa == min || eb_fb == min) {
-      return true;
-    } else {
-      return false;
-    }
-  }
-}
 
 void compute_likelihood(){
   ROOT::Math::MinimizerOptions::SetDefaultMinimizer("Minuit");
@@ -202,21 +95,84 @@ void compute_likelihood(){
   TTreeReaderArray<Double_t> reco_pe(MuRecoReader, "reco_pe");
   TTreeReaderArray<Double_t> hit_t(MuRecoReader, "hit_t");
   TTreeReaderArray<Bool_t> hit(MuRecoReader, "hit");
+  
+  
+  TF1* f_lognormal = new TF1("f_lognormal", "ROOT::Math::lognormal_pdf(x,[0],[1])", 0, 2000);
+  f_lognormal->SetParNames("log(m)", "#sigma");
+  f_lognormal->SetNpx(3000);
+  std::vector<double> logms, sigmas, reco_pes;
+  std::vector<double> err_logms, err_sigmas, err_reco_pes;
 
-  if (rebin_h2) h2_exp_reco->Rebin2D(rebinning, rebinning);
-
+  
   // For each bin in the y-axis of h2_exp_reco project on the x-axis and normalize
   // the projection to have area=1
+  if (rebin_h2) h2_exp_reco->Rebin2D(rebinning, rebinning);
   for(int idx_y=0; idx_y<=h2_exp_reco->GetNbinsY()+1; idx_y++){
+    std::cout << idx_y << "/" << h2_exp_reco->GetNbinsY() << "\r" << std::flush;
     TH1D* h1_proj = h2_exp_reco->ProjectionX("h1_proj", idx_y, idx_y);
     double h1_proj_integral = h1_proj->Integral();
+    
     if(h1_proj_integral > 0.){
-      h1_proj->Scale(1./h1_proj_integral);
+      h1_proj->Scale(1./(h1_proj_integral*h1_proj->GetBinWidth(1)));
+      
+      double mean = h1_proj->GetBinCenter(h1_proj->GetMaximumBin());
+      double stddev = h1_proj->GetStdDev();
+
+      f_lognormal->SetParameters(log(mean), 0.25);
+      f_lognormal->SetParLimits(0, log(mean-5*stddev), log(mean+5*stddev));
+
+      TFitResultPtr fit_res = nullptr;
+      if (h1_proj->GetEntries() > 1500) fit_res = h1_proj->Fit(f_lognormal, "Q", "", std::max(0.,mean-5*stddev), mean+5*stddev);
+      h1_proj->SetName(Form("h1_proj_%i_pe", (int)h2_exp_reco->GetYaxis()->GetBinCenter(idx_y)));
+      // h1_proj->Write();
+
       for(int idx_x=0; idx_x<=h2_exp_reco->GetNbinsX()+1; idx_x++){
         h2_exp_reco->SetBinContent(idx_x, idx_y, h1_proj->GetBinContent(idx_x));
+      } 
+
+      
+      double reco = h2_exp_reco->GetXaxis()->GetBinCenter(idx_y);
+      // if (reco > 400) break; // Stop if reco is greater than 40
+      if (reco > 3 && h1_proj->GetEntries() > 1500 && fit_res==0){
+        reco_pes.push_back(reco);                        err_reco_pes.push_back(0);
+        logms.push_back(f_lognormal->GetParameter(0));   err_logms.push_back(f_lognormal->GetParError(0));
+        sigmas.push_back(f_lognormal->GetParameter(1));  err_sigmas.push_back(f_lognormal->GetParError(1));
       }
     }
-  }
+  } // handle h2_exp_reco and fit lognormal_pdf
+  // --- TGRAPHS ------------------------------------------------
+  TGraphErrors* g_logms = new TGraphErrors(logms.size(), &reco_pes[0], &logms[0], &err_reco_pes[0], &err_logms[0]);
+  g_logms->SetTitle("log(MPV) vs reco_pe;#Reco Pe;log(MPV)");
+  g_logms->SetName("g_logms");
+  TGraphErrors* g_sigmas = new TGraphErrors(sigmas.size(), &reco_pes[0], &sigmas[0], &err_reco_pes[0], &err_sigmas[0]);
+  g_sigmas->SetTitle("#sigma vs reco_pe;#Reco Pe;#sigma");
+  g_sigmas->SetName("g_sigmas");
+
+  // Fit the parameter trends
+  TF1* f_logms_trend = new TF1("f_logms_trend", "[0]+log(x)", trend_thr, 2000.);
+  f_logms_trend->SetParNames("const");
+  f_logms_trend->SetParameters(.5);
+  f_logms_trend->SetNpx(2000);
+
+  g_logms->Fit(f_logms_trend, "", "", trend_thr, 80.);
+
+  TF1* f_sigmas_trend = new TF1("f_sigmas_trend", "[3]+[2]*exp(-[1]*(x-[0]))", trend_thr, 2000.);
+  f_sigmas_trend->SetParNames("x0", "lambda", "A", "const");
+  f_sigmas_trend->SetParameters(5., 0.1, 1., 0.2);
+  f_sigmas_trend->SetNpx(2000);
+
+  g_sigmas->Fit(f_sigmas_trend, "", "", trend_thr, 80.);
+
+
+
+
+
+
+
+
+
+
+
   // Get X and Y axis maximum values
   double reco_max = h2_exp_reco->GetXaxis()->GetXmax();
   double exp_max = h2_exp_reco->GetYaxis()->GetXmax();
@@ -264,114 +220,108 @@ void compute_likelihood(){
   Long64_t nentries = MuRecoTree->GetEntries();
   Double_t old_mu[n_opdet]; Double_t old_true_energy = 0.; Double_t old_vertex_coor[3] = {0.};
 
-  Event fake_event, true_event;
-  Flash true_flash, fake_flash, null_flash;
+  Event true_event, t_event;
+  Flash true_flash, t_flash, null_flash;
+  std::vector<Event> fake_events;
+  std::vector<Flash> fake_flashes;
 
   while(MuRecoReader.Next()){
     // if (entry == 30000) break;
     entry++;
-    if (idx_event==0) {
-      fake_event = Event(*true_energy, vertex_coor, mu);
-      fake_flash = Flash(reco_pe, hit_t, hit);
-      if (fake_flash == null_flash) continue; // The first can't be null
-      idx_event++;
+    if (fake_events.size()<30) {
+      t_event = Event(*true_energy, vertex_coor, mu);
+      t_flash = Flash(reco_pe, hit_t, hit);
+      if (t_flash == null_flash) continue;
+      fake_events.push_back(t_event);
+      fake_flashes.push_back(t_flash);
       continue;
     }
 
-    true_event = Event(*true_energy, vertex_coor, mu);
-    true_flash = Flash(reco_pe, hit_t, hit);
+    t_event = Event(*true_energy, vertex_coor, mu);
+    t_flash = Flash(reco_pe, hit_t, hit);
+    if (t_flash == null_flash) continue;
 
-    if (true_flash == null_flash /*|| fake_flash == null_flash*/) {
-      // std::cout << "E=" << *true_energy << "\tx=" << vertex_coor[0] << "\ty=" << vertex_coor[1] << "\tz=" << vertex_coor[2] << std::endl;
-      // std::cout << "Event " << entry << " is null." << std::endl;
-      continue;
-    }
+    true_flash = fake_flashes[0];
+    true_event = fake_events[0];
+    std::rotate(fake_flashes.begin(), fake_flashes.begin()+1, fake_flashes.end());
+    std::rotate(fake_events.begin(),  fake_events.begin()+1,  fake_events.end());
+    fake_flashes[fake_flashes.size()-1] = t_flash;
+    fake_events[fake_events.size()-1]   = t_event;
 
-    // if (true_event == fake_event) {
-    //   std::cout << "Event " << entry << " is the same as the previous one." << std::endl;
-    // }
-    // if (true_flash == fake_flash) {
-    //   std::cout << "Flash " << entry << " is the same as the previous one." << std::endl;
-    // }
-    // if (null_flash == true_flash){
-    //   std::cout << "Flash " << entry << " is null." << std::endl;
-    // }
+    for (size_t idx_fake=0; idx_fake<fake_events.size(); idx_fake++){
+      Event fake_event = fake_events[idx_fake];
+      Flash fake_flash = fake_flashes[idx_fake];
+      std::vector<double> true_terms, fake_terms;
 
-    bool evt_with_zeros = false;
-
-    std::vector<double> true_terms, fake_terms;
-    if (use_fit_efficiency) {
-      true_terms = compute_loglikelihood_terms(true_event, true_flash, f_hit_prob, h2_exp_reco);
-      fake_terms = compute_loglikelihood_terms(fake_event, true_flash, f_hit_prob, h2_exp_reco);
-    } else {
-      true_terms = compute_loglikelihood_terms(true_event, true_flash, he_hit_prob, h2_exp_reco);
-      fake_terms = compute_loglikelihood_terms(fake_event, true_flash, he_hit_prob, h2_exp_reco);
-    }
-
-    double Fq = std::accumulate(true_terms.begin(), true_terms.end(), 0.0);
-    double Fq_fake = std::accumulate(fake_terms.begin(), fake_terms.end(), 0.0);
-
-    for (size_t i = 0; i < n_opdet; ++i) {
-      if (true_flash.hit[i]) {
-        h_term_hit->Fill(true_terms[i]);
-        h_term_hit_fake->Fill(fake_terms[i]);
-      } else {
-        h_term_miss->Fill(true_terms[i]);
-        h_term_miss_fake->Fill(fake_terms[i]);
+      if (use_fit_lognormal) {
+        true_terms = compute_loglikelihood_terms(true_event, true_flash, f_hit_prob, f_lognormal, f_logms_trend, f_sigmas_trend, g_logms, g_sigmas, trend_thr);
+        fake_terms = compute_loglikelihood_terms(fake_event, true_flash, f_hit_prob, f_lognormal, f_logms_trend, f_sigmas_trend, g_logms, g_sigmas, trend_thr);
       }
-    }
+      else if (use_fit_efficiency) {
+        true_terms = compute_loglikelihood_terms(true_event, true_flash, f_hit_prob, h2_exp_reco);
+        fake_terms = compute_loglikelihood_terms(fake_event, true_flash, f_hit_prob, h2_exp_reco);
+      } else {
+        true_terms = compute_loglikelihood_terms(true_event, true_flash, he_hit_prob, h2_exp_reco);
+      fake_terms = compute_loglikelihood_terms(fake_event, true_flash, he_hit_prob, h2_exp_reco);
+      }
 
-    if (max_term < *std::max_element(true_terms.begin(), true_terms.end())) {
-      max_term = *std::max_element(true_terms.begin(), true_terms.end());
-    }
-    if (min_term > *std::min_element(true_terms.begin(), true_terms.end())) {
-      min_term = *std::min_element(true_terms.begin(), true_terms.end());
-    }
-    if (max_term_fake < *std::max_element(fake_terms.begin(), fake_terms.end())) {
-      max_term_fake = *std::max_element(fake_terms.begin(), fake_terms.end());
-    }
-    if (min_term_fake > *std::min_element(fake_terms.begin(), fake_terms.end())) {
+      double Fq = std::accumulate(true_terms.begin(), true_terms.end(), 0.0);
+      double Fq_fake = std::accumulate(fake_terms.begin(), fake_terms.end(), 0.0);
+
+      for (size_t i = 0; i < n_opdet; ++i) {
+        if (true_flash.hit[i]) {
+          h_term_hit->Fill(true_terms[i]);
+          h_term_hit_fake->Fill(fake_terms[i]);
+        } else {
+          h_term_miss->Fill(true_terms[i]);
+          h_term_miss_fake->Fill(fake_terms[i]);
+        }
+      }
+
+      if (max_term < *std::max_element(true_terms.begin(), true_terms.end())) {
+        max_term = *std::max_element(true_terms.begin(), true_terms.end());
+      }
+      if (min_term > *std::min_element(true_terms.begin(), true_terms.end())) {
+        min_term = *std::min_element(true_terms.begin(), true_terms.end());
+      }
+      if (max_term_fake < *std::max_element(fake_terms.begin(), fake_terms.end())) {
+        max_term_fake = *std::max_element(fake_terms.begin(), fake_terms.end());
+      }
+      if (min_term_fake > *std::min_element(fake_terms.begin(), fake_terms.end())) {
       min_term_fake = *std::min_element(fake_terms.begin(), fake_terms.end());
+      }
+
+
+      h_Fq->Fill(Fq);
+      h_Fq_fake->Fill(Fq_fake);
+
+      if(entry % 1000 == 0)
+        std::cout << "Analyzed " << double(entry)/double(nentries)*100. << "% of the events. Fake-matches: " << double(fake_counter)/double(evt_counter)*100. 
+          << " % Mismatches: " << double(mismatch_counter)/double(evt_counter)*100.
+          << " % Combos: " << double(combo_counter)/double(evt_counter)*100.
+          << "%\r" << std::flush;
+
+      bool match;
+      if (use_fit_efficiency) match = flash_matcher(true_event, true_flash, fake_event, fake_flash, f_hit_prob, h2_exp_reco);
+      else match = flash_matcher(true_event, true_flash, fake_event, fake_flash, he_hit_prob, h2_exp_reco);
+
+      if(Fq_fake < Fq) {
+        x_mis.push_back(true_event.vertex_coor[0]);
+        y_mis.push_back(true_event.vertex_coor[1]);
+        z_mis.push_back(true_event.vertex_coor[2]);
+        dx_mis.push_back(true_event.vertex_coor[0] - fake_event.vertex_coor[0]);
+        dy_mis.push_back(true_event.vertex_coor[1] - fake_event.vertex_coor[1]);
+        dz_mis.push_back(true_event.vertex_coor[2] - fake_event.vertex_coor[2]);
+        de_mis.push_back(true_event.true_energy - fake_event.true_energy);
+        fake_counter++;
+      }
+      if(!match) mismatch_counter++;
+      if(Fq_fake < Fq && !match) combo_counter++;
+      evt_counter++;
     }
-
-    // if(evt_with_zeros) evts_with_zeros++;
-    
-    h_Fq->Fill(Fq);
-    h_Fq_fake->Fill(Fq_fake);
-
-    if(entry % 1000 == 0)
-      std::cout << "Analyzed " << double(entry)/double(nentries)*100. << "% of the events. Fake-matches: " << double(fake_counter)/double(evt_counter)*100. 
-        << " % Mismatches: " << double(mismatch_counter)/double(evt_counter)*100.
-        << " % Combos: " << double(combo_counter)/double(evt_counter)*100.
-        << "%\r" << std::flush;
-   
-    bool match;
-    if (use_fit_efficiency) flash_matcher(true_event, true_flash, fake_event, fake_flash, f_hit_prob, h2_exp_reco);
-    else flash_matcher(true_event, true_flash, fake_event, fake_flash, he_hit_prob, h2_exp_reco);
-
-    if(Fq_fake < Fq) {
-      // std::cout << "-------- " << std::endl;
-      // std::cout << "Fake (E,coor)\t" << fake_event.true_energy << "\t" << "(" << fake_event.vertex_coor[0] << "," << fake_event.vertex_coor[1] << "," << fake_event.vertex_coor[2] << ")" << std::endl;
-      // std::cout << "True (E,coor)\t" << true_event.true_energy << "\t" << "(" << true_event.vertex_coor[0] << "," << true_event.vertex_coor[1] << "," << true_event.vertex_coor[2] << ")" << std::endl;
-      // std::cout << "-------- " << std::endl;
-      x_mis.push_back(true_event.vertex_coor[0]);
-      y_mis.push_back(true_event.vertex_coor[1]);
-      z_mis.push_back(true_event.vertex_coor[2]);
-      dx_mis.push_back(true_event.vertex_coor[0] - fake_event.vertex_coor[0]);
-      dy_mis.push_back(true_event.vertex_coor[1] - fake_event.vertex_coor[1]);
-      dz_mis.push_back(true_event.vertex_coor[2] - fake_event.vertex_coor[2]);
-      de_mis.push_back(true_event.true_energy - fake_event.true_energy);
-      fake_counter++;
-    }
-    if(!match) mismatch_counter++;
-    if(Fq_fake < Fq && !match) combo_counter++;
-    evt_counter++;
-    fake_event = true_event;
-    fake_flash = true_flash;
   } // end loop over events
   
   // --- OUTPUT ---------------------------------------------------------------
-
   TH1D* h_x_mis = new TH1D("h_x_mis",Form("%s;%s;%s","h_x_mis","x [cm]","counts"),
                           100, *std::min_element(x_mis.begin(), x_mis.end()), *std::max_element(x_mis.begin(), x_mis.end()));
 
@@ -393,15 +343,15 @@ void compute_likelihood(){
   TH1D* h_de_mis = new TH1D("h_de_mis",Form("%s;%s;%s","h_de_mis","#DeltaE [MeV]","counts"),
                           100, *std::min_element(de_mis.begin(), de_mis.end()), *std::max_element(de_mis.begin(), de_mis.end()));
 
-  TH2D* h2_de_dx_mis = new TH2D("h2_de_dx_mis",Form("%s;%s;%s","h2_de_dx_mis","#Deltax [MeV]","#DeltaE [cm]"),
+  TH2D* h2_de_dx_mis = new TH2D("h2_de_dx_mis",Form("%s;%s;%s","h2_de_dx_mis","#Deltax [cm]","#DeltaE [MeV]"),
                           100, *std::min_element(dx_mis.begin(), dx_mis.end()), *std::max_element(dx_mis.begin(), dx_mis.end()),
                           100, *std::min_element(de_mis.begin(), de_mis.end()), *std::max_element(de_mis.begin(), de_mis.end()));
 
-  TH2D* h2_de_dy_mis = new TH2D("h2_de_dy_mis",Form("%s;%s;%s","h2_de_dy_mis","#Deltay [MeV]","#DeltaE [cm]"),
+  TH2D* h2_de_dy_mis = new TH2D("h2_de_dy_mis",Form("%s;%s;%s","h2_de_dy_mis","#Deltay [cm]","#DeltaE [MeV]"),
                           100, *std::min_element(dy_mis.begin(), dy_mis.end()), *std::max_element(dy_mis.begin(), dy_mis.end()),
                           100, *std::min_element(de_mis.begin(), de_mis.end()), *std::max_element(de_mis.begin(), de_mis.end()));
 
-  TH2D* h2_de_dz_mis = new TH2D("h2_de_dz_mis",Form("%s;%s;%s","h2_de_dz_mis","#Deltaz [MeV]","#DeltaE [cm]"),
+  TH2D* h2_de_dz_mis = new TH2D("h2_de_dz_mis",Form("%s;%s;%s","h2_de_dz_mis","#Deltaz [cm]","#DeltaE [MeV]"),
                           100, *std::min_element(dz_mis.begin(), dz_mis.end()), *std::max_element(dz_mis.begin(), dz_mis.end()),
                           100, *std::min_element(de_mis.begin(), de_mis.end()), *std::max_element(de_mis.begin(), de_mis.end()));
 
@@ -427,18 +377,10 @@ void compute_likelihood(){
             << "\ndE dx correlation:\t" << h2_de_dx_mis->GetCorrelationFactor()
             << "\ndE dy correlation:\t" << h2_de_dy_mis->GetCorrelationFactor()
             << "\ndE dz correlation:\t" << h2_de_dz_mis->GetCorrelationFactor()
-            // << "\nZeros terms: " << zeros_term << "/" << evt_counter*n_opdet
-            // << "\nZeros terms %: " << zeros_term/double(evt_counter*n_opdet)*100.
-            // << "\nFake Zeros terms: " << zeros_term_fake << "/" << evt_counter*n_opdet
-            // << "\nFake Zeros terms %: " << zeros_term_fake/double(evt_counter*n_opdet)*100.
-            // << "\nEvents with zeros: " << evts_with_zeros << "/" << evt_counter
-            // << "\nEvents with zeros %: " << evts_with_zeros/double(evt_counter)*100.
-            // << "\nMin term: " << min_term
-            // << "\nMax term: " << max_term
-            // << "\nMin term fake: " << min_term_fake
-            // << "\nMax term fake: " << max_term_fake
             << std::endl;  
 
+  g_logms->Write();
+  g_sigmas->Write();
   h_x_mis->Write();
   h_y_mis->Write();
   h_z_mis->Write();
