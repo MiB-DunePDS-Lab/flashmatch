@@ -86,9 +86,9 @@ void fm_parametrizer(){
   g_sigmas->SetName("g_sigmas");
 
   // Fit the parameter trends
-  TF1* f_logms_trend = new TF1("f_logms_trend", "[0]+log(x)", 0., 2000.);
-  f_logms_trend->SetParNames("const");
-  f_logms_trend->SetParameters(.5);
+  TF1* f_logms_trend = new TF1("f_logms_trend", "[0]+[1]*log(x)", 0., 2000.);
+  f_logms_trend->SetParNames("const", "log_slope");
+  f_logms_trend->SetParameters(.5, 1.2);
   f_logms_trend->SetNpx(3000);
 
   g_logms->Fit(f_logms_trend, "", "", fit_trend_low, fit_trend_up);
