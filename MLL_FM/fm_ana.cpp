@@ -10,16 +10,14 @@
 #include "flash_matcher.hpp"
 
 const size_t n_combinations = 50;
-const double trend_thr = 20.;
-// const TString visibility_file_name = "dunevis_fdhd_1x2x6_test_float.root"; // File with the visibility maps
 
 
 void fm_ana(){
   // --- CONFIGS ---------------------------------------------------------------
   MLLcconfigs f = load_ana_config("./config.json");
-  // double trend_thr = f.trend_thr;
   std::string input_dir        = f.input_dir;
   TString visibility_file_name = f.visibility_file_name;
+  double trend_thr             = f.trend_thr;
 
 
   // --- INPUTS ---------------------------------------------------------------

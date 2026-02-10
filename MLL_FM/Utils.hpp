@@ -354,6 +354,7 @@ struct MLLcconfigs{
   double fit_trend_up;
   bool rebin_h2; // Rebin h2_exp_reco_norm
   int rebinning; // Rebinning factor for h2_exp_reco_norm
+  double trend_thr;
 };
 
 inline MLLcconfigs load_ana_config(const std::string &filename){
@@ -382,6 +383,7 @@ inline MLLcconfigs load_ana_config(const std::string &filename){
   config.fit_trend_up         = j.at("fit_trend_up").get<double>();
   config.rebin_h2             = j.at("rebin_h2").get<bool>();
   config.rebinning            = j.at("rebinning").get<int>();
+  config.trend_thr            = j.at("trend_thr").get<double>();
 
   return config;
 }
