@@ -30,12 +30,13 @@ void fm_calibrator(){
   float drift_velocity = 360./2244.44; // HARD CODED: Drift velocity in cm/tick
 
   // --- LOOP OVER ANA FILES ---------------------------------------------------
-  std::vector<std::string> ana_files = get_list_of_files_in_folder(input_dir, ".root");
+  std::string sample_dir = input_dir+"files/";
+  std::vector<std::string> ana_files = get_list_of_files_in_folder(sample_dir, ".root");
   int nfile_to_analyze = std::min(int(ana_files.size()), max_nfiles);
   int nfile_analyzed = 0; int idx_file = 0;
   while(nfile_analyzed < nfile_to_analyze){
     // --- ANA STUFF -----------------------------------------------------------
-    std::string ana_file_name = input_dir+ana_files[idx_file];
+    std::string ana_file_name = sample_dir+ana_files[idx_file];
     idx_file++;
     if(!std::filesystem::exists(ana_file_name)) continue;
     nfile_analyzed++;
@@ -105,7 +106,7 @@ void fm_calibrator(){
   calib_c = f_Calib->GetParameter(0); calib_slope = f_Calib->GetParameter(1);
   calib_tree->Fill();
 
-  TFile* calibrator_file = TFile::Open("MLL_Calibrator.root", "RECREATE");
+  TFile* calibrator_file = TFile::Open((input_dir+"MLL_Calibrator.root").c_str(), "RECREATE");
   calibrator_file->cd();
   calib_tree->Write();
   h2_QperE_driftTime->Write();

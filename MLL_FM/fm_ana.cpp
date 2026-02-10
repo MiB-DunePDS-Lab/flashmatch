@@ -18,11 +18,12 @@ void fm_ana(){
   // --- CONFIGS ---------------------------------------------------------------
   MLLcconfigs f = load_ana_config("./config.json");
   // double trend_thr = f.trend_thr;
+  std::string input_dir        = f.input_dir;
   TString visibility_file_name = f.visibility_file_name;
 
 
   // --- INPUTS ---------------------------------------------------------------
-  TFile* calib_file = TFile::Open("./MLL_Calibrator.root", "READ");
+  TFile* calib_file = TFile::Open((input_dir+"MLL_Calibrator.root").c_str(), "READ");
   TTree* calib_tree = static_cast<TTree*>(calib_file->Get("calib_tree"));
   Float_t calib_c = 0.;         Float_t calib_slope = 0.;
   Float_t drift_velocity = 0.0; Float_t corr_lambda = 0.0;
@@ -33,7 +34,7 @@ void fm_ana(){
   calib_tree->GetEntry(0);
   // calib_file->Close();
 
-  TFile* distribution_file = TFile::Open("./MLL_Distributions.root", "READ");
+  TFile* distribution_file = TFile::Open((input_dir+"MLL_Distributions.root").c_str(), "READ");
   TTree* tpc_pds_tree = static_cast<TTree*>(distribution_file->Get("tpc_pds_tree"));
   int ifile, iev;
   float charge, time_tpc, time_pds, y_reco, z_reco, e_reco;
@@ -62,7 +63,7 @@ void fm_ana(){
   pds_tree->GetEntry(0); // Read the first entry to get the parameters
   // TH2D* h2_exp_reco = static_cast<TH2D*>(distribution_file->Get("h2_exp_reco_norm"));
 
-  TFile* parametrizer_file = TFile::Open("./MLL_Parametrizer.root", "READ");
+  TFile* parametrizer_file = TFile::Open((input_dir+"MLL_Parametrizer.root").c_str(), "READ");
   TF1* f_reco_prob = static_cast<TF1*>(parametrizer_file->Get("f_reco_prob"));
   TF1* f_lognormal = static_cast<TF1*>(parametrizer_file->Get("f_lognormal"));
   TF1* f_logms_trend = static_cast<TF1*>(parametrizer_file->Get("f_logms_trend"));
@@ -238,7 +239,7 @@ void fm_ana(){
   std::cout << "of which "  << ninfinity << "/" << nmismatch << " are infinite" << std::endl;
 
   // --- WRITE OUTPUT ----------------------------------------------------------
-  TFile* out_file = TFile::Open("MLL_AnaOutput.root", "RECREATE");
+  TFile* out_file = TFile::Open((input_dir+"MLL_AnaOutput.root").c_str(), "RECREATE");
   out_file->cd();
   h_LL->Write();
   h_LL_fake->Write();

@@ -1,5 +1,5 @@
 {
-  "input_dir":  "../testing_cheating_FM/no_bkg/",
+  "input_dir":  "../data/testing_cheating_FM/with_bkg/",
   "visibility_file_name": "../dunevis_fdhd_1x2x6_test_float.root",
   "max_nfiles": 200,
   "fit_Qcorr_Etrue_low": 5,
@@ -12,8 +12,8 @@
   "yz_fiducial_cut": 40,
   "x_fiducial_cut": 50,
   "verbose": true,
-  "fit_trend_low": 5,
-  "fit_trend_up": 21,
+  "fit_trend_low": 15,
+  "fit_trend_up": 32,
   "rebin_h2": false,
   "rebinning": 2
 }
