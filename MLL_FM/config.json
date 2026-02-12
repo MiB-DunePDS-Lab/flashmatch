@@ -16,5 +16,5 @@
   "fit_trend_up": 32,
   "rebin_h2": false,
   "rebinning": 2,
-  "trend_thr": 20,
+  "trend_thr": 20
 }
