@@ -11,13 +11,14 @@
 void fm_parametrizer(){
   // --- CONFIGS ---------------------------------------------------------------
   MLLcconfigs f = load_ana_config("./config.json");
-  double fit_trend_low = f.fit_trend_low;
-  double fit_trend_up  = f.fit_trend_up;
-  bool rebin_h2        = f.rebin_h2;
-  int rebinning        = f.rebinning;
+  std::string input_dir = f.input_dir;
+  double fit_trend_low  = f.fit_trend_low;
+  double fit_trend_up   = f.fit_trend_up;
+  bool rebin_h2         = f.rebin_h2;
+  int rebinning         = f.rebinning;
   
   // --- INPUTS ---------------------------------------------------------------
-  TFile* distribution_file = TFile::Open("./MLL_Distributions.root", "READ");
+  TFile* distribution_file = TFile::Open((input_dir+"MLL_Distributions.root").c_str(), "READ");
   TH2D* h2_exp_reco        = static_cast<TH2D*>(distribution_file->Get("h2_exp_reco"));
   TEfficiency* he_hit_prob = static_cast<TEfficiency*>(distribution_file->Get("he_hit_prob"));
   
@@ -36,7 +37,7 @@ void fm_parametrizer(){
   std::vector<double> logms, sigmas, reco_pes;
   std::vector<double> err_logms, err_sigmas, err_reco_pes;
   
-  TFile* out_file = TFile::Open("MLL_Parametrizer.root", "RECREATE");
+  TFile* out_file = TFile::Open((input_dir+"MLL_Parametrizer.root").c_str(), "RECREATE");
   out_file->mkdir("projections");
   out_file->cd("projections");
   

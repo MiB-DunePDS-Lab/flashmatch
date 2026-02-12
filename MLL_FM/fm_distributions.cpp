@@ -57,7 +57,7 @@ TH2D* get_normalized_bidistribution(TH2D* h2_bidistr){
 void fm_distributions(){
   // --- CONFIGS ---------------------------------------------------------------
   MLLcconfigs f = load_ana_config("./config.json");
-  std::string ana_folder_name      = f.input_dir;
+  std::string input_dir            = f.input_dir;
   std::string visibility_file_name = f.visibility_file_name;
   int max_nfiles                   = f.max_nfiles;
   float pe_low                     = f.pe_low;
@@ -74,7 +74,7 @@ void fm_distributions(){
   // --- INPUTS ---------------------------------------------------------------
   // Calibration fit + correction lambda and drift velocity
   // The latest could be retrieved from fhicls, actually
-  TFile* calib_file = TFile::Open("./MLL_Calibrator.root", "READ");
+  TFile* calib_file = TFile::Open((input_dir+"MLL_Calibrator.root").c_str(), "READ");
   TTree* calib_tree = static_cast<TTree*>(calib_file->Get("calib_tree"));
   Float_t calib_c = 0.;         Float_t calib_slope = 0.;
   Float_t drift_velocity = 0.0; Float_t corr_lambda = 0.0;
@@ -116,7 +116,7 @@ void fm_distributions(){
 
 
   // --- PREPARE OUTPUT -------------------------------------------------------
-  TFile* out_file = TFile::Open("MLL_Distributions.root", "RECREATE");
+  TFile* out_file = TFile::Open((input_dir+"MLL_Distributions.root").c_str(), "RECREATE");
   TTree* tpc_pds_tree = new TTree("tpc_pds_tree", "tpc_pds_tree");
   Int_t ifile, iev;
   float charge, time_tpc, time_pds, my_x_reco, x_reco, y_reco, z_reco, e_reco;
@@ -157,12 +157,13 @@ void fm_distributions(){
   Float_t vertex_coor[3] = {0.};
   
   // --- LOOP OVER ANA FILES ---------------------------------------------------
-  std::vector<std::string> ana_files = get_list_of_files_in_folder(ana_folder_name, ".root");
+  std::string sample_dir = input_dir+"files/";
+  std::vector<std::string> ana_files = get_list_of_files_in_folder(sample_dir, ".root");
   int nfile_to_analyze = std::min(int(ana_files.size()), max_nfiles);
   int nfile_analyzed = 0; int idx_file = 0;
   while(nfile_analyzed < nfile_to_analyze){
     // --- ANA STUFF -----------------------------------------------------------
-    std::string ana_file_name = ana_folder_name+ana_files[idx_file];
+    std::string ana_file_name = sample_dir+ana_files[idx_file];
     idx_file++;
     if(!std::filesystem::exists(ana_file_name)) continue;
     ifile = idx_file; nfile_analyzed++;
