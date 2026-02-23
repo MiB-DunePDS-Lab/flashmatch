@@ -13,7 +13,32 @@
 #include "TTreeReaderValue.h"
 #include "Utils.hpp"
 
+using CalibTuple  = std::tuple<float,float,float,float>;
+using CalibVector = std::vector<CalibTuple>;
 
+
+// =====================================================
+//      Function to apply the cut in QperE
+// =====================================================
+CalibVector apply_QperE_cut(const CalibVector& input, float low, float high)
+{
+    CalibVector output;
+    output.reserve(input.size());
+
+    for (const auto& entry : input) {
+
+        float Charge    = std::get<0>(entry);
+        float E_true     = std::get<1>(entry);
+        float drifttime = std::get<2>(entry);
+        float QperE     = std::get<3>(entry);
+
+        if (QperE < low || QperE > high) {
+            output.push_back(entry);
+        }
+    }
+
+    return output;
+}
 
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
@@ -24,13 +49,19 @@ void fm_calibrator(){
   std::string input_dir          = f.input_dir;
   double fit_Qcorr_Etrue_low     = f.fit_Qcorr_Etrue_low;
   double fit_Qcorr_Etrue_up      = f.fit_Qcorr_Etrue_up;
-
+  bool apply_cut                 = f.apply_cut;
+  float q_cut_low                = f.q_cut_low;
+  float q_cut_high               = f.q_cut_high;
+  
   // --- EXTRA VARIABLES -------------------------------------------------------
-  std::vector<std::tuple<float, float, float, float>> true_calib_info; // 
-  float drift_velocity = 360./2244.44; // HARD CODED: Drift velocity in cm/tick
+  //std::vector<std::tuple<float, float, float, float>> true_calib_info; // 
+  CalibVector true_calib_info;
+  CalibVector filtered_info;
+  
+  float drift_velocity = 360./2244.44; // HARD CODED: Drift velocity in cm/tick  ~3.0 cm/us
 
   // --- LOOP OVER ANA FILES ---------------------------------------------------
-  std::string sample_dir = input_dir+"files/";
+  std::string sample_dir = input_dir+"files/";  //with and without background
   std::vector<std::string> ana_files = get_list_of_files_in_folder(sample_dir, ".root");
   int nfile_to_analyze = std::min(int(ana_files.size()), max_nfiles);
   int nfile_analyzed = 0; int idx_file = 0;
@@ -40,7 +71,7 @@ void fm_calibrator(){
     idx_file++;
     if(!std::filesystem::exists(ana_file_name)) continue;
     nfile_analyzed++;
-    /* if (idx_file % 10 == 0) */ std::cout <<nfile_analyzed<<"--"<< ana_file_name << "\r" << std::flush;
+    /* if (idx_file % 10 == 0) */ std::cout << "--" <<nfile_analyzed<<"--"<< ana_file_name << "\r" << std::flush;
 
     TFile* ana_file = TFile::Open(ana_file_name.c_str(), "READ");
     TTree* tree = static_cast<TTree*>(ana_file->Get("solarnuana/SolarNuAnaTree"));
@@ -63,15 +94,26 @@ void fm_calibrator(){
   float min_etrue  = get_minimum_from_tuples(true_calib_info, 1); float max_etrue  = get_maximum_from_tuples(true_calib_info, 1);
   float min_drift  = get_minimum_from_tuples(true_calib_info, 2); float max_drift  = get_maximum_from_tuples(true_calib_info, 2);
   float min_QperE  = get_minimum_from_tuples(true_calib_info, 3); float max_QperE  = get_maximum_from_tuples(true_calib_info, 3);
+  
+  if (apply_cut){
+     filtered_info = apply_QperE_cut(true_calib_info, q_cut_low, q_cut_high);
 
+    std::cout << "Original size:  " << true_calib_info.size() << std::endl;
+    std::cout << "Filtered size:  " << filtered_info.size() << std::endl;
+  }
+  else {
+        filtered_info =true_calib_info;
+       }
+  
   // Create charge-per-energy vs drift-time plots
   TH2D* h2_QperE_driftTime = new TH2D("h2_QperE_driftTime",
                                       Form("%s;%s;%s", "h2_QperE_driftTime", "Drift Time", "QperE"),
                                       100, min_drift, max_drift, 50, min_QperE, max_QperE);
-  for (const auto& [charge, etrue, drifttime, QperE] : true_calib_info){
+     
+  for (const auto& [charge, etrue, drifttime, QperE] : filtered_info){
     h2_QperE_driftTime->Fill(drifttime, QperE);
-  }
-
+    }
+  //std::cout << "min_QperE"<< min_QperE << std::endl;
   TGraphErrors* g_QperE_driftTime = th2d_to_tgraph_mpv(h2_QperE_driftTime, "g_QperE_driftTime");
   g_QperE_driftTime->SetTitle("QperE vs Drift Time;Drift Time [ticks];QperE [Charge/MeV]");
   
@@ -87,16 +129,16 @@ void fm_calibrator(){
                                   Form("%s;%s;%s", "h2_Qcorr_Etrue", "E_{true} [MeV]", "Qcorr"),
                                   100, min_etrue, max_etrue, 50, min_charge, max_charge);
   float corr_lambda = 1/f_Qcorr->GetParameter(1);
-  for (const auto& [charge, etrue, drifttime, QperE] : true_calib_info){
+  for (const auto& [charge, etrue, drifttime, QperE] : filtered_info){
     h2_Qcorr_Etrue->Fill(etrue, charge*exp(drifttime*corr_lambda));
-  }
+   }
 
   TGraphErrors* g_Qcorr_Etrue = th2d_to_tgraph_mpv(h2_Qcorr_Etrue, "g_Qcorr_Etrue");
   g_Qcorr_Etrue->SetTitle("Calib Graph;E_{true} [MeV];Q_{corr}");
   TF1* f_Calib = new TF1("f_Calib", "pol1");
   f_Calib->SetParNames("c", "slope");
   g_Qcorr_Etrue->Fit(f_Calib, "", "", fit_Qcorr_Etrue_low, fit_Qcorr_Etrue_up);
-
+  
   TTree* calib_tree = new TTree("calib_tree", "calib_tree");
   Float_t calib_c = 0.; Float_t calib_slope = 0.;
   calib_tree->Branch("calib_c",        &calib_c, "calib_c/F"); 

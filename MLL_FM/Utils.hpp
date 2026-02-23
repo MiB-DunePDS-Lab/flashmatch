@@ -355,6 +355,9 @@ struct MLLcconfigs{
   bool rebin_h2; // Rebin h2_exp_reco_norm
   int rebinning; // Rebinning factor for h2_exp_reco_norm
   double trend_thr;
+  bool apply_cut;                 
+  float q_cut_low;                
+  float q_cut_high;  
 };
 
 inline MLLcconfigs load_ana_config(const std::string &filename){
@@ -384,7 +387,9 @@ inline MLLcconfigs load_ana_config(const std::string &filename){
   config.rebin_h2             = j.at("rebin_h2").get<bool>();
   config.rebinning            = j.at("rebinning").get<int>();
   config.trend_thr            = j.at("trend_thr").get<double>();
-
+  config.apply_cut            = j.at("apply_cut").get<bool>();
+  config.q_cut_low            = j.at("q_cut_low").get<float>();
+  config.q_cut_high           = j.at("q_cut_high").get<float>();
   return config;
 }
 

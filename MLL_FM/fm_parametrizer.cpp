@@ -4,7 +4,6 @@
 #include <TH2D.h>
 #include <TF1.h>
 #include <TEfficiency.h>
-
 #include "Utils.hpp"
 
 
@@ -12,19 +11,25 @@ void fm_parametrizer(){
   // --- CONFIGS ---------------------------------------------------------------
   MLLcconfigs f = load_ana_config("./config.json");
   std::string input_dir = f.input_dir;
-  double fit_trend_low  = f.fit_trend_low;
-  double fit_trend_up   = f.fit_trend_up;
-  bool rebin_h2         = f.rebin_h2;
-  int rebinning         = f.rebinning;
+  double fit_trend_low = f.fit_trend_low;
+  double fit_trend_up  = f.fit_trend_up;
+  bool rebin_h2        = f.rebin_h2;
+  int rebinning        = f.rebinning;
   
   // --- INPUTS ---------------------------------------------------------------
   TFile* distribution_file = TFile::Open((input_dir+"MLL_Distributions.root").c_str(), "READ");
   TH2D* h2_exp_reco        = static_cast<TH2D*>(distribution_file->Get("h2_exp_reco"));
   TEfficiency* he_hit_prob = static_cast<TEfficiency*>(distribution_file->Get("he_hit_prob"));
   
-  TF1* f_reco_prob_fit = new TF1("f_hit_prob_fit", sigmoid_sigmoid_erf, 0., 40., 6); // To fit only in a short range
+  // ========================
+  //      Fit Prob
+  // ========================
+  
+  TF1* f_reco_prob_fit = new TF1("f_hit_prob_fit", sigmoid_sigmoid_erf, 0., 60., 6); // To fit only in a short range
+  f_reco_prob_fit->SetParNames("amp1","x0_1","slope1","amp2","x0_2","slope2");
   f_reco_prob_fit->SetNpx(3000);
-  f_reco_prob_fit->SetParameters(7, 1.7, -5.8, 7., 2.8, 1.2);
+  f_reco_prob_fit->SetParameters(7, 0.5, 1.0, 7., 0.8, 5.0);
+  f_reco_prob_fit->SetParLimits(2, 0.75, 1.05);     
   he_hit_prob->Fit(f_reco_prob_fit, "R");
   
   TF1* f_reco_prob = new TF1("f_reco_prob", sigmoid_sigmoid_erf, 0., 2000., 6); // Extend the function range
@@ -85,23 +90,33 @@ void fm_parametrizer(){
   TGraphErrors* g_sigmas = new TGraphErrors(sigmas.size(), &reco_pes[0], &sigmas[0], &err_reco_pes[0], &err_sigmas[0]);
   g_sigmas->SetTitle("#sigma vs reco_pe;#Reco Pe;#sigma");
   g_sigmas->SetName("g_sigmas");
-
+  
   // Fit the parameter trends
-  TF1* f_logms_trend = new TF1("f_logms_trend", "[0]+[1]*log(x)", 0., 2000.);
-  f_logms_trend->SetParNames("const", "log_slope");
-  f_logms_trend->SetParameters(.5, 1.2);
-  f_logms_trend->SetNpx(3000);
-
-  g_logms->Fit(f_logms_trend, "", "", fit_trend_low, fit_trend_up);
-
-  TF1* f_sigmas_trend = new TF1("f_sigmas_trend", "[3]+[2]*exp(-[1]*(x-[0]))", 0., 2000.);
-  f_sigmas_trend->SetParNames("x0", "lambda", "A", "const");
-  f_sigmas_trend->SetParameters(5., 0.1, 1., 0.2);
-  f_sigmas_trend->SetParLimits(3, 0., 5.);
+  
+  // ========================
+  //      Fit logms
+  // ========================
+  
+  TF1* f_logms_trend = new TF1("f_logms_trend", "[0]+[1]*log(x+[2])", 0.4, 2000);
+  f_logms_trend->SetParNames("offset","log_slope","linear_slope");
+  f_logms_trend->SetParameters(-0.5,1.2,1.0);  
+  f_logms_trend->SetParLimits(1, 0.0, 5.0);
+  f_logms_trend->SetParLimits(2,-3.0, 10.0);
+  //f_logms_trend->SetNpx(3000);
+  //g_logms->Fit(f_logms_trend, "R");
+  g_logms->Fit(f_logms_trend, "", "", fit_trend_low, fit_trend_up); 
+  
+  // ========================
+  //      Fit sigma
+  // ========================
+      
+  TF1* f_sigmas_trend = new TF1("f_sigmas_trend","([0] + [1]*x + [2]*x*x)/(1 + [3]*x + [4]*x*x)", 3.0, 2000);
+  f_sigmas_trend->SetParameters(0.6, 0.01,0.0001,0.05,0.0002);
   f_sigmas_trend->SetNpx(3000);
-
+  f_sigmas_trend->SetParLimits(4,0,10);   
+  f_sigmas_trend->SetParLimits(2,0,10);    
   g_sigmas->Fit(f_sigmas_trend, "", "", fit_trend_low, fit_trend_up);
-
+  
   TTree* parametrizer_tree = new TTree("parametrizer_tree", "parametrizer_tree");
   float log_const, sigma_x0, sigma_lambda, sigma_A, sigma_const;
   parametrizer_tree->Branch("log_const",    &log_const, "log_const/F");

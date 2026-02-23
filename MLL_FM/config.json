@@ -1,9 +1,9 @@
 {
-  "input_dir":  "../data/testing_cheating_FM/with_bkg/",
+  "input_dir":  "../solar_files/",
   "visibility_file_name": "../dunevis_fdhd_1x2x6_test_float.root",
-  "max_nfiles": 200,
+  "max_nfiles": 3000,
   "fit_Qcorr_Etrue_low": 5,
-  "fit_Qcorr_Etrue_up": 25,
+  "fit_Qcorr_Etrue_up": 30,
   "pe_low": 0,
   "pe_up": 300,
   "light_yield": 20000,
@@ -12,9 +12,12 @@
   "yz_fiducial_cut": 40,
   "x_fiducial_cut": 50,
   "verbose": true,
-  "fit_trend_low": 15,
-  "fit_trend_up": 32,
+  "fit_trend_low": 0,
+  "fit_trend_up": 35,
   "rebin_h2": false,
   "rebinning": 2,
-  "trend_thr": 20
+  "trend_thr": 0,
+  "apply_cut" :true,
+  "q_cut_low": 0.0,
+  "q_cut_high":7
 }
