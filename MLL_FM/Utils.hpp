@@ -115,6 +115,25 @@ inline float give_me_Ereco(float calib_c, float calib_slope, float corr_lambda,
   return E_reco;
 }
 
+inline TH2D* get_normalized_bidistribution(TH2D* h2_bidistr){
+  TH2D* h2_bidistr_norm = new TH2D(Form("%s_norm", h2_bidistr->GetName()),
+                                   Form("%s_norm;%s;%s", h2_bidistr->GetName(), h2_bidistr->GetXaxis()->GetTitle(), h2_bidistr->GetYaxis()->GetTitle()),
+                                   h2_bidistr->GetNbinsX(), h2_bidistr->GetXaxis()->GetXmin(), h2_bidistr->GetXaxis()->GetXmax(),
+                                   h2_bidistr->GetNbinsY(), h2_bidistr->GetYaxis()->GetXmin(), h2_bidistr->GetYaxis()->GetXmax());
+  for(int idx_y=1; idx_y<=h2_bidistr->GetNbinsY(); idx_y++){
+    TH1D* h1_proj = h2_bidistr->ProjectionX("h1_proj", idx_y, idx_y);
+    double h1_proj_integral = h1_proj->Integral();
+    
+    if(h1_proj_integral > 0.){
+      h1_proj->Scale(1./(h1_proj_integral*h1_proj->GetBinWidth(1)));
+
+      for(int idx_x=1; idx_x<=h2_bidistr->GetNbinsX(); idx_x++){
+        h2_bidistr_norm->SetBinContent(idx_x, idx_y, h1_proj->GetBinContent(idx_x));
+      } 
+    }
+  }
+  return h2_bidistr_norm;
+}
 
 
 // --- HANDLE VISIBILITIES ----------------------------------------------------
@@ -323,11 +342,6 @@ inline double sigmoid(double* x, double* par){
 // Positive error function (0 to 1)
 inline double positive_erf(double* x, double* par){
   return 0.5*(1.+TMath::Erf((x[0]-par[0])/par[1]));
-}
-
-// Sigmoid times positive_erf
-inline double sigmoid_erf(double* x, double* par){
-  return sigmoid(x, &par[0]) * positive_erf(x, &par[2]);
 }
 
 // Sigmoid times sigmoid times positive_erf 
