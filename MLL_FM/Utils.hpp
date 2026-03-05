@@ -329,6 +329,30 @@ inline double sigmoid_sigmoid_erf(double* x, double* par){
   return sigmoid(x, &par[0]) * sigmoid(x, &par[2]) * positive_erf(x, &par[4]);
 }
 
+// Gamma distribution
+inline double gamma_dist(double* x, double* par){
+  if (x[0] <= 0) return 0.;
+  double k = par[0];
+  double theta = par[1];
+  return (pow(x[0], k-1) * exp(-x[0]/theta)) / (pow(theta, k) * TMath::Gamma(k));
+}
+
+// Weibull distribution
+inline double weibull_dist(double* x, double* par){
+  if (x[0] <= 0) return 0.;
+  double k = par[0];
+  double lambda = par[1];
+  return (k / lambda) * pow(x[0] / lambda, k - 1) * exp(-pow(x[0] / lambda, k));
+}
+
+// Log-logistic distribution
+inline double log_logistic_dist(double* x, double* par){
+  if (x[0] <= 0) return 0.;
+  double alpha = par[0];
+  double beta = par[1];
+  double z = pow(x[0]/alpha, beta);
+  return (beta / alpha) * z / pow(1 + z, 2);
+}
 
 struct MLLcconfigs{
   std::string input_dir;
