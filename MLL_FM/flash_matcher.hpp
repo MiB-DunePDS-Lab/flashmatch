@@ -123,9 +123,9 @@ public:
     float reco_pe, exp_ph;
     x_reco = delta_time*drift_velocity;
     float vertex_coor[3] = {x_reco, tpc_cluster.y_reco, tpc_cluster.z_reco};
-    vertex_coor[0] = std::max(vertex_coor[0], tpc_min[0]); vertex_coor[0] = std::min(vertex_coor[0], tpc_max[0]-3);
-    vertex_coor[1] = std::max(vertex_coor[1], tpc_min[1]); vertex_coor[1] = std::min(vertex_coor[1], tpc_max[1]);
-    vertex_coor[2] = std::max(vertex_coor[2], tpc_min[2]); vertex_coor[2] = std::min(vertex_coor[2], tpc_max[2]);
+    vertex_coor[0] = std::max(vertex_coor[0], tpc_min[0]+15); vertex_coor[0] = std::min(vertex_coor[0], tpc_max[0]-15);
+    vertex_coor[1] = std::max(vertex_coor[1], tpc_min[1]+15); vertex_coor[1] = std::min(vertex_coor[1], tpc_max[1]-15);
+    vertex_coor[2] = std::max(vertex_coor[2], tpc_min[2]+15); vertex_coor[2] = std::min(vertex_coor[2], tpc_max[2]-15);
     int tpc_index = GetTPCIndex(vertex_coor, hgrid, cryo_to_tpc);
 
     float x_min_g_logms = g_logms->GetX()[0];
@@ -154,7 +154,6 @@ public:
           f_lognormal->SetParameters(g_logms->Eval(exp_ph), g_sigmas->Eval(exp_ph));
           log_likelihood += log(P_hit_mu*f_lognormal->Eval(reco_pe));
         }
-        // log_likelihood += log(P_hit_mu*h2_exp_reco->GetBinContent(h2_exp_reco->FindBin(reco_pe, exp_ph)));
       } else {
         log_likelihood += log(1. - P_hit_mu);
       }
