@@ -18,6 +18,7 @@ void fm_ana(){
   std::string input_dir        = f.input_dir;
   TString visibility_file_name = f.visibility_file_name;
   double trend_thr             = f.trend_thr;
+  double min_charge_cut        = f.min_charge;
 
 
   // --- INPUTS ---------------------------------------------------------------
@@ -30,7 +31,6 @@ void fm_ana(){
   calib_tree->SetBranchAddress("drift_velocity", &drift_velocity);
   calib_tree->SetBranchAddress("corr_lambda", &corr_lambda);
   calib_tree->GetEntry(0);
-  // calib_file->Close();
 
   TFile* distribution_file = TFile::Open((input_dir+"MLL_Distributions.root").c_str(), "READ");
   TTree* tpc_pds_tree = static_cast<TTree*>(distribution_file->Get("tpc_pds_tree"));
@@ -62,13 +62,12 @@ void fm_ana(){
   // TH2D* h2_exp_reco = static_cast<TH2D*>(distribution_file->Get("h2_exp_reco_norm"));
 
   TFile* parametrizer_file = TFile::Open((input_dir+"MLL_Parametrizer.root").c_str(), "READ");
-  TF1* f_reco_prob = static_cast<TF1*>(parametrizer_file->Get("f_reco_prob"));
-  TF1* f_lognormal = static_cast<TF1*>(parametrizer_file->Get("f_lognormal"));
-  TF1* f_logms_trend = static_cast<TF1*>(parametrizer_file->Get("f_logms_trend"));
-  TF1* f_sigmas_trend = static_cast<TF1*>(parametrizer_file->Get("f_sigmas_trend"));
-  TH2D* h2_exp_reco = static_cast<TH2D*>(parametrizer_file->Get("h2_exp_reco"));
-
-  TGraphErrors* g_logms = static_cast<TGraphErrors*>(parametrizer_file->Get("g_logms")); 
+  TF1* f_reco_prob       = static_cast<TF1*>(parametrizer_file->Get("f_reco_prob"));
+  TF1* f_lognormal       = static_cast<TF1*>(parametrizer_file->Get("f_lognormal"));
+  TF1* f_logms_trend     = static_cast<TF1*>(parametrizer_file->Get("f_logms_trend"));
+  TF1* f_sigmas_trend    = static_cast<TF1*>(parametrizer_file->Get("f_sigmas_trend"));
+  TH2D* h2_exp_reco      = static_cast<TH2D*>(parametrizer_file->Get("h2_exp_reco"));
+  TGraphErrors* g_logms  = static_cast<TGraphErrors*>(parametrizer_file->Get("g_logms")); 
   TGraphErrors* g_sigmas = static_cast<TGraphErrors*>(parametrizer_file->Get("g_sigmas"));
 
   // --- HISTOS -----------------------------------------------------------------
@@ -173,7 +172,7 @@ void fm_ana(){
 
 
     ClusterPDS true_pds_cluster = ClusterPDS(time_pds, reco_pes);
-    if (true_pds_cluster.IsEmpty()) {
+    if (true_pds_cluster.IsEmpty() || charge < min_charge_cut) {
       // std::cerr << "Error: PDS cluster vectors are empty!" << std::endl;
       continue; // Skip empty clusters
     }
@@ -259,5 +258,7 @@ void fm_ana(){
   likelihood_computer.g_logms->Write();
   out_file->Close();
 
+  calib_file->Close();
+  
   return;
 }
