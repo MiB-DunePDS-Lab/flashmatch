@@ -72,6 +72,29 @@ std::vector<T> treeBranch_to_vector(TTree* tree, const std::string& branch_name)
   return vec;
 }
 
+// function to take the indices of the cluster with the max charge
+inline std::vector<size_t> take_max_charge_indices(TTree* tree,
+                                            const std::string& event_branch_name,
+                                            const std::string& charge_branch_name) {
+  std::vector<int> Events = treeBranch_to_vector<int>(tree, event_branch_name);
+  std::vector<float> Charges = treeBranch_to_vector<float>(tree, charge_branch_name);
+  std::vector<size_t> MaxChargeIndxs;
+  int old_event = -1;
+  for (size_t i=0; i<Events.size(); i++) {
+    if (old_event==Events[i]) continue;
+    old_event = Events[i];
+
+    size_t max_charge_index = i;
+    size_t j=i+1;
+    while(j<Events.size() && Events[j] == Events[i]){
+      if (Charges[j]>Charges[i]) max_charge_index = j;
+      j++;
+    }
+    MaxChargeIndxs.push_back(max_charge_index);
+  }
+  return MaxChargeIndxs;
+}
+
 
 inline TGraphErrors* th2d_to_tgraph_mpv(TH2D* h2, const std::string& name){
   TGraphErrors* g = new TGraphErrors();
@@ -374,6 +397,7 @@ struct MLLcconfigs{
   std::string input_dir;
   std::string visibility_file_name;
   int max_nfiles;
+  double min_charge;
   double fit_Qcorr_Etrue_low;
   double fit_Qcorr_Etrue_up;
   float pe_low;
@@ -402,6 +426,7 @@ inline MLLcconfigs load_ana_config(const std::string &filename){
   MLLcconfigs config;
   config.input_dir            = j.at("input_dir").get<std::string>();
   config.visibility_file_name = j.at("visibility_file_name").get<std::string>();
+  config.min_charge           = j.at("min_charge").get<double>();
   config.fit_Qcorr_Etrue_low  = j.at("fit_Qcorr_Etrue_low").get<double>();
   config.fit_Qcorr_Etrue_up   = j.at("fit_Qcorr_Etrue_up").get<double>();
   config.max_nfiles           = j.at("max_nfiles").get<int>();
