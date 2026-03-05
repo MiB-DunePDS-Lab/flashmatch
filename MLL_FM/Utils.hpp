@@ -57,6 +57,22 @@ inline std::vector<std::string> get_list_of_files_in_folder(std::string folder_n
 }
 
 
+template <typename T>
+std::vector<T> treeBranch_to_vector(TTree* tree, const std::string& branch_name) {
+  std::vector<T> vec;
+  tree->Draw(branch_name.c_str(), "", "goff");
+  int n = tree->GetSelectedRows();
+  double* array = tree->GetV1();
+
+  vec.reserve(n);
+  for (int i = 0; i < n; ++i) {
+    vec.push_back(static_cast<T>(array[i]));
+  }
+
+  return vec;
+}
+
+
 inline TGraphErrors* th2d_to_tgraph_mpv(TH2D* h2, const std::string& name){
   TGraphErrors* g = new TGraphErrors();
   g->SetName(name.c_str()); g->SetTitle(h2->GetTitle());
