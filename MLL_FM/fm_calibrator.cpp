@@ -13,32 +13,6 @@
 #include "TTreeReaderValue.h"
 #include "Utils.hpp"
 
-using CalibTuple  = std::tuple<float,float,float,float>;
-using CalibVector = std::vector<CalibTuple>;
-
-
-// =====================================================
-//      Function to apply the cut in QperE
-// =====================================================
-CalibVector apply_QperE_cut(const CalibVector& input, float low, float high)
-{
-    CalibVector output;
-    output.reserve(input.size());
-
-    for (const auto& entry : input) {
-
-        float Charge    = std::get<0>(entry);
-        float E_true     = std::get<1>(entry);
-        float drifttime = std::get<2>(entry);
-        float QperE     = std::get<3>(entry);
-
-        if (QperE < low || QperE > high) {
-            output.push_back(entry);
-        }
-    }
-
-    return output;
-}
 
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
@@ -54,11 +28,8 @@ void fm_calibrator(){
   float q_cut_high               = f.q_cut_high;
   
   // --- EXTRA VARIABLES -------------------------------------------------------
-  //std::vector<std::tuple<float, float, float, float>> true_calib_info; // 
-  CalibVector true_calib_info;
-  CalibVector filtered_info;
-  
-  float drift_velocity = 360./2244.44; // HARD CODED: Drift velocity in cm/tick  ~3.0 cm/us
+  std::vector<std::tuple<float, float, float, float>> true_calib_info; // 
+  float drift_velocity = 360./2244.44; // HARD CODED: Drift velocity in cm/tick
 
   // --- LOOP OVER ANA FILES ---------------------------------------------------
   std::string sample_dir = input_dir+"files/";  //with and without background
@@ -95,22 +66,12 @@ void fm_calibrator(){
   float min_drift  = get_minimum_from_tuples(true_calib_info, 2); float max_drift  = get_maximum_from_tuples(true_calib_info, 2);
   float min_QperE  = get_minimum_from_tuples(true_calib_info, 3); float max_QperE  = get_maximum_from_tuples(true_calib_info, 3);
   
-  if (apply_cut){
-     filtered_info = apply_QperE_cut(true_calib_info, q_cut_low, q_cut_high);
-
-    std::cout << "Original size:  " << true_calib_info.size() << std::endl;
-    std::cout << "Filtered size:  " << filtered_info.size() << std::endl;
-  }
-  else {
-        filtered_info =true_calib_info;
-       }
-  
   // Create charge-per-energy vs drift-time plots
   TH2D* h2_QperE_driftTime = new TH2D("h2_QperE_driftTime",
                                       Form("%s;%s;%s", "h2_QperE_driftTime", "Drift Time", "QperE"),
                                       100, min_drift, max_drift, 50, min_QperE, max_QperE);
      
-  for (const auto& [charge, etrue, drifttime, QperE] : filtered_info){
+  for (const auto& [charge, etrue, drifttime, QperE] : true_calib_info){
     h2_QperE_driftTime->Fill(drifttime, QperE);
     }
   //std::cout << "min_QperE"<< min_QperE << std::endl;
@@ -129,7 +90,7 @@ void fm_calibrator(){
                                   Form("%s;%s;%s", "h2_Qcorr_Etrue", "E_{true} [MeV]", "Qcorr"),
                                   100, min_etrue, max_etrue, 50, min_charge, max_charge);
   float corr_lambda = 1/f_Qcorr->GetParameter(1);
-  for (const auto& [charge, etrue, drifttime, QperE] : filtered_info){
+  for (const auto& [charge, etrue, drifttime, QperE] : true_calib_info){
     h2_Qcorr_Etrue->Fill(etrue, charge*exp(drifttime*corr_lambda));
    }
 
