@@ -36,11 +36,12 @@ void fm_parametrizer(){
   f_reco_prob->SetNpx(3000);
   f_reco_prob->SetParameters(f_reco_prob_fit->GetParameters());
 
-  TF1* f_lognormal = new TF1("f_lognormal", "ROOT::Math::lognormal_pdf(x,[0],[1])", 0, 2000);
+  // TF1* f_lognormal = new TF1("f_lognormal", "ROOT::Math::lognormal_pdf(x,[0],[1])", 0, 2000);
+  TF1* f_lognormal = new TF1("f_lognormal", gamma_dist, 0., 2000., 2);
   f_lognormal->SetParNames("log(m)", "#sigma");
   f_lognormal->SetNpx(3000);
-  std::vector<double> logms, sigmas, reco_pes;
-  std::vector<double> err_logms, err_sigmas, err_reco_pes;
+  std::vector<double> logms, sigmas, exp_phs;
+  std::vector<double> err_logms, err_sigmas, err_exp_phs;
   
   TFile* out_file = TFile::Open((input_dir+"MLL_Parametrizer.root").c_str(), "RECREATE");
   out_file->mkdir("projections");
@@ -49,7 +50,7 @@ void fm_parametrizer(){
   if (rebin_h2) h2_exp_reco->Rebin2D(rebinning, rebinning);
   for(int idx_y=1; idx_y<=h2_exp_reco->GetNbinsY(); idx_y++){
     std::cout << idx_y << "/" << h2_exp_reco->GetNbinsY() << "\r" << std::flush;
-    TH1D* h1_proj = h2_exp_reco->ProjectionX("h1_proj", idx_y, idx_y);
+    TH1D* h1_proj = h2_exp_reco->ProjectionX("h1_proj", idx_y, idx_y, "e");
     double h1_proj_integral = h1_proj->Integral();
     
     if(h1_proj_integral > 0.){
@@ -58,8 +59,12 @@ void fm_parametrizer(){
       double mean   = h1_proj->GetBinCenter(h1_proj->GetMaximumBin());
       double stddev = h1_proj->GetStdDev();
 
-      f_lognormal->SetParameters(log(mean), 0.25);
-      f_lognormal->SetParLimits(0, log(mean-5*stddev), log(mean+5*stddev));
+      // f_lognormal->SetParameters(log(mean), 0.25);
+      // f_lognormal->SetParLimits(0, log(mean-5*stddev), log(mean+5*stddev));
+      f_lognormal->SetParameters(mean, 1.);
+      f_lognormal->SetParLimits(0, mean-5*stddev, mean+5*stddev);
+      // f_lognormal->FixParameter(0, mean);
+      // f_lognormal->FixParameter(1, 1.);
 
       TFitResultPtr fit_res = nullptr;
       if (h1_proj->GetEntries() > 400) fit_res = h1_proj->Fit(f_lognormal, "Q", "", std::max(0.,mean-5*stddev), mean+5*stddev);
@@ -71,10 +76,10 @@ void fm_parametrizer(){
       } 
 
       
-      double reco = h2_exp_reco->GetXaxis()->GetBinCenter(idx_y);
+      double exp_ph = h2_exp_reco->GetYaxis()->GetBinCenter(idx_y);
       // if (reco > 400) break; // Stop if reco is greater than 40
-      if (reco > 3 && h1_proj->GetEntries() > 400 && fit_res==0){
-        reco_pes.push_back(reco);                        err_reco_pes.push_back(0);
+      if (exp_ph > 0 && h1_proj->GetEntries() > 400 && fit_res==0){
+        exp_phs.push_back(exp_ph);                       err_exp_phs.push_back(0);
         logms.push_back(f_lognormal->GetParameter(0));   err_logms.push_back(f_lognormal->GetParError(0));
         sigmas.push_back(f_lognormal->GetParameter(1));  err_sigmas.push_back(f_lognormal->GetParError(1));
       }
@@ -83,12 +88,12 @@ void fm_parametrizer(){
 
 
   // --- TGRAPHS ------------------------------------------------
-  TGraphErrors* g_logms = new TGraphErrors(logms.size(), &reco_pes[0], &logms[0], &err_reco_pes[0], &err_logms[0]);
-  g_logms->SetTitle("log(MPV) vs reco_pe;#Reco Pe;log(MPV)");
+  TGraphErrors* g_logms = new TGraphErrors(logms.size(), &exp_phs[0], &logms[0], &err_exp_phs[0], &err_logms[0]);
+  g_logms->SetTitle("log(MPV) vs Expected Photons;#Expected Photons;log(MPV)");
   g_logms->SetName("g_logms");
 
-  TGraphErrors* g_sigmas = new TGraphErrors(sigmas.size(), &reco_pes[0], &sigmas[0], &err_reco_pes[0], &err_sigmas[0]);
-  g_sigmas->SetTitle("#sigma vs reco_pe;#Reco Pe;#sigma");
+  TGraphErrors* g_sigmas = new TGraphErrors(sigmas.size(), &exp_phs[0], &sigmas[0], &err_exp_phs[0], &err_sigmas[0]);
+  g_sigmas->SetTitle("#sigma vs Expected Photons;#Expected Photons;#sigma");
   g_sigmas->SetName("g_sigmas");
   
   // Fit the parameter trends
@@ -102,8 +107,11 @@ void fm_parametrizer(){
   f_logms_trend->SetParameters(-0.5,1.2,1.0);  
   f_logms_trend->SetParLimits(1, 0.0, 5.0);
   f_logms_trend->SetParLimits(2,-3.0, 10.0);
-  //f_logms_trend->SetNpx(3000);
-  //g_logms->Fit(f_logms_trend, "R");
+  // TF1* f_logms_trend = new TF1("f_logms_trend", "[0]+[1]*x", 0., 2000.);
+  // f_logms_trend->SetParNames("const", "log_slope");
+  // f_logms_trend->SetParameters(.5, 1.2);
+  // f_logms_trend->SetNpx(3000);
+  // g_logms->Fit(f_logms_trend, "R");
   g_logms->Fit(f_logms_trend, "", "", fit_trend_low, fit_trend_up); 
   
   // ========================
@@ -112,31 +120,20 @@ void fm_parametrizer(){
       
   TF1* f_sigmas_trend = new TF1("f_sigmas_trend","([0] + [1]*x + [2]*x*x)/(1 + [3]*x + [4]*x*x)", 3.0, 2000);
   f_sigmas_trend->SetParameters(0.6, 0.01,0.0001,0.05,0.0002);
+  // TF1* f_sigmas_trend = new TF1("f_sigmas_trend", "[2]+[1]*sqrt([0]*x)", 0., 2000.);
+  // f_sigmas_trend->SetParNames("b", "A", "const");
+  // f_sigmas_trend->SetParameters(2., 1., -0.5);
   f_sigmas_trend->SetNpx(3000);
   f_sigmas_trend->SetParLimits(4,0,10);   
   f_sigmas_trend->SetParLimits(2,0,10);    
   g_sigmas->Fit(f_sigmas_trend, "", "", fit_trend_low, fit_trend_up);
-  
-  TTree* parametrizer_tree = new TTree("parametrizer_tree", "parametrizer_tree");
-  float log_const, sigma_x0, sigma_lambda, sigma_A, sigma_const;
-  parametrizer_tree->Branch("log_const",    &log_const, "log_const/F");
-  parametrizer_tree->Branch("sigma_x0",     &sigma_x0, "sigma_x0/F");
-  parametrizer_tree->Branch("sigma_lambda", &sigma_lambda, "sigma_lambda/F");
-  parametrizer_tree->Branch("sigma_A",      &sigma_A, "sigma_A/F");
-  parametrizer_tree->Branch("sigma_const",  &sigma_const, "sigma_const/F");
-  log_const    = f_logms_trend->GetParameter(0);
-  sigma_x0     = f_sigmas_trend->GetParameter(0);
-  sigma_lambda = f_sigmas_trend->GetParameter(1);
-  sigma_A      = f_sigmas_trend->GetParameter(2);
-  sigma_const  = f_sigmas_trend->GetParameter(3);
-  parametrizer_tree->Fill();
 
 
   out_file->cd();
-  parametrizer_tree->Write();
   he_hit_prob->Write();
   h2_exp_reco->Write();
   f_reco_prob->Write();
+  f_lognormal->SetParameters(f_logms_trend->Eval(20.), f_sigmas_trend->Eval(20.));
   f_lognormal->Write();
   f_logms_trend->Write();
   f_sigmas_trend->Write();

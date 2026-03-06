@@ -10,7 +10,7 @@
   "arapuca_pde": 0.03,
   "min_visibility": 1e-15,
   "yz_fiducial_cut": 40,
-  "x_fiducial_cut": 50,
+  "x_fiducial_cut": 10,
   "verbose": true,
   "fit_trend_low": 0,
   "fit_trend_up": 35,

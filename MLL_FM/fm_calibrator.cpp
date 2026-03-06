@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <filesystem>
+#include <iterator>
 #include <tuple>
 #include <vector>
 
@@ -46,15 +47,17 @@ void fm_calibrator(){
 
     TFile* ana_file = TFile::Open(ana_file_name.c_str(), "READ");
     TTree* tree = static_cast<TTree*>(ana_file->Get("solarnuana/SolarNuAnaTree"));
-    TTreeReader treeReader(tree);
+    std::vector<size_t> MaxChargeIndxs = take_max_charge_indices(tree, "Event", "Charge");
 
+    TTreeReader treeReader(tree);
     TTreeReaderValue<float> E_true(treeReader, "SignalParticleE");
     TTreeReaderValue<float> x_true(treeReader, "SignalParticleX");
     TTreeReaderValue<float> Charge(treeReader, "Charge");
     TTreeReaderValue<bool> MatchedOpFlashCorrectly(treeReader, "MatchedOpFlashCorrectly");
    
-    while (treeReader.Next()) {
-      if (!(*MatchedOpFlashCorrectly)) continue;
+    for (auto& idx_entry : MaxChargeIndxs){
+      treeReader.SetEntry(idx_entry);
+      if (!(*MatchedOpFlashCorrectly) || *Charge<min_charge_cut) continue;
       float driftTime = abs((*x_true)/drift_velocity);
       true_calib_info.push_back(std::make_tuple(*Charge, *E_true, driftTime, *Charge/(*E_true)));
     }
