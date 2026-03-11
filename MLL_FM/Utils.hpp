@@ -397,7 +397,6 @@ struct MLLcconfigs{
   std::string input_dir;
   std::string visibility_file_name;
   int max_nfiles;
-  double min_charge;
   double fit_Qcorr_Etrue_low;
   double fit_Qcorr_Etrue_up;
   float pe_low;
@@ -408,6 +407,7 @@ struct MLLcconfigs{
   float yz_fiducial_cut;
   float x_fiducial_cut;
   // bool verbose;
+  std::string distribution;
   double fit_trend_low;
   double fit_trend_up;
   bool rebin_h2; // Rebin h2_exp_reco_norm
@@ -429,7 +429,6 @@ inline MLLcconfigs load_ana_config(const std::string &filename){
   MLLcconfigs config;
   config.input_dir            = j.at("input_dir").get<std::string>();
   config.visibility_file_name = j.at("visibility_file_name").get<std::string>();
-  config.min_charge           = j.at("min_charge").get<double>();
   config.fit_Qcorr_Etrue_low  = j.at("fit_Qcorr_Etrue_low").get<double>();
   config.fit_Qcorr_Etrue_up   = j.at("fit_Qcorr_Etrue_up").get<double>();
   config.max_nfiles           = j.at("max_nfiles").get<int>();
@@ -441,6 +440,7 @@ inline MLLcconfigs load_ana_config(const std::string &filename){
   config.yz_fiducial_cut      = j.at("yz_fiducial_cut").get<float>();
   config.x_fiducial_cut       = j.at("x_fiducial_cut").get<float>();
   // config.verbose              = j.at("verbose").get<bool>();
+  config.distribution         = j.at("distribution").get<std::string>();
   config.fit_trend_low        = j.at("fit_trend_low").get<double>();
   config.fit_trend_up         = j.at("fit_trend_up").get<double>();
   config.rebin_h2             = j.at("rebin_h2").get<bool>();
