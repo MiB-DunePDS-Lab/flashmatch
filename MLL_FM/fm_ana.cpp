@@ -9,7 +9,7 @@
 
 #include "flash_matcher.hpp"
 
-const size_t n_combinations = 50;
+const size_t n_combinations = 10;
 
 
 void fm_ana(){
@@ -18,8 +18,7 @@ void fm_ana(){
   std::string input_dir        = f.input_dir;
   TString visibility_file_name = f.visibility_file_name;
   double trend_thr             = f.trend_thr;
-  double min_charge_cut        = f.min_charge;
-
+  double q_cut_low             = f.q_cut_low;
 
   // --- INPUTS ---------------------------------------------------------------
   TFile* calib_file = TFile::Open((input_dir+"MLL_Calibrator.root").c_str(), "READ");
@@ -34,6 +33,7 @@ void fm_ana(){
 
   TFile* distribution_file = TFile::Open((input_dir+"MLL_Distributions.root").c_str(), "READ");
   TTree* tpc_pds_tree = static_cast<TTree*>(distribution_file->Get("tpc_pds_tree"));
+  std::vector<size_t> MaxChargeIndxs = take_max_charge_indices(tpc_pds_tree, "iev", "charge");
   int ifile, iev;
   float charge, time_tpc, time_pds, y_reco, z_reco, e_reco;
   float x_true, y_true, z_true, e_true;
@@ -61,14 +61,14 @@ void fm_ana(){
   pds_tree->GetEntry(0); // Read the first entry to get the parameters
   // TH2D* h2_exp_reco = static_cast<TH2D*>(distribution_file->Get("h2_exp_reco_norm"));
 
-  TFile* parametrizer_file = TFile::Open((input_dir+"MLL_Parametrizer.root").c_str(), "READ");
-  TF1* f_reco_prob       = static_cast<TF1*>(parametrizer_file->Get("f_reco_prob"));
-  TF1* f_lognormal       = static_cast<TF1*>(parametrizer_file->Get("f_lognormal"));
-  TF1* f_logms_trend     = static_cast<TF1*>(parametrizer_file->Get("f_logms_trend"));
-  TF1* f_sigmas_trend    = static_cast<TF1*>(parametrizer_file->Get("f_sigmas_trend"));
-  TH2D* h2_exp_reco      = static_cast<TH2D*>(parametrizer_file->Get("h2_exp_reco"));
-  TGraphErrors* g_logms  = static_cast<TGraphErrors*>(parametrizer_file->Get("g_logms")); 
-  TGraphErrors* g_sigmas = static_cast<TGraphErrors*>(parametrizer_file->Get("g_sigmas"));
+  TFile* parametrizer_file  = TFile::Open((input_dir+"MLL_Parametrizer.root").c_str(), "READ");
+  TF1* f_reco_prob          = static_cast<TF1*>(parametrizer_file->Get("f_reco_prob"));
+  TF1* f_RecoExpDistr       = static_cast<TF1*>(parametrizer_file->Get("f_RecoExpDistr"));
+  TF1* f_par1_trend         = static_cast<TF1*>(parametrizer_file->Get("f_par1_trend"));
+  TF1* f_par2_trend         = static_cast<TF1*>(parametrizer_file->Get("f_par2_trend"));
+  TH2D* h2_exp_reco         = static_cast<TH2D*>(parametrizer_file->Get("h2_exp_reco"));
+  TGraphErrors* g_par1      = static_cast<TGraphErrors*>(parametrizer_file->Get("g_par1")); 
+  TGraphErrors* g_par2      = static_cast<TGraphErrors*>(parametrizer_file->Get("g_par2"));
 
   // --- HISTOS -----------------------------------------------------------------
   TH1D* h_LL = new TH1D("h_LL",Form("%s;%s;%s","h_LL","LL","counts"),
@@ -99,6 +99,9 @@ void fm_ana(){
 
   TH1D* h_de_mis = new TH1D("h_de_mis",Form("%s;%s;%s","h_de_mis","#DeltaE [MeV]","counts"),
                           100, -10, 10);
+
+  TH1D* h_ErecoEtrue_mis = new TH1D("h_ErecoEtrue_mis",Form("%s;%s;%s","h_ErecoEtrue_mis","E_{reco}/E_{true}","counts"),
+                                100, 0, 2);
 
   TH2D* h2_de_dx_mis = new TH2D("h2_de_dx_mis",Form("%s;%s;%s","h2_de_dx_mis","#Deltax [cm]","#DeltaE [MeV]"),
                           100, -750, 750,
@@ -135,11 +138,11 @@ void fm_ana(){
     drift_velocity,       // Drift velocity
     LY_times_PDE,         // Light yield times photo detector efficiency
     f_reco_prob,          // Reconstruction probability function
-    f_lognormal,          // Lognormal function for extrapolation
-    f_logms_trend,        // Trend function for logm
-    f_sigmas_trend,       // Trend function for sigma
-    g_logms,              // Graph for logm values
-    g_sigmas,             // Graph for sigma values
+    f_RecoExpDistr,       // PDF for extrapolation
+    f_par1_trend,         // Trend function for par1
+    f_par2_trend,         // Trend function for par2
+    g_par1,               // Graph for par1 values
+    g_par2,               // Graph for par2 values
     trend_thr,            // Threshold for trend
     calib_c,              // Calibration constant
     calib_slope,          // Calibration slope
@@ -152,7 +155,8 @@ void fm_ana(){
   float ntry = 0; float nmismatch = 0; float ninfinity = 0;
   std::vector<ClusterTPC> fake_tpc_clusters;
   std::vector<VertexInfo> fake_vertex_info;
-  for (Long64_t entry = 0; entry < tpc_pds_tree->GetEntries(); entry++) {
+  // for (Long64_t entry = 0; entry < tpc_pds_tree->GetEntries(); entry++) {
+  for (size_t entry : MaxChargeIndxs) {
     tpc_pds_tree->GetEntry(entry);
     // time_pds = -18;
     // if (time_pds > -13.8) continue;
@@ -172,7 +176,7 @@ void fm_ana(){
 
 
     ClusterPDS true_pds_cluster = ClusterPDS(time_pds, reco_pes);
-    if (true_pds_cluster.IsEmpty() || charge < min_charge_cut) {
+    if (true_pds_cluster.IsEmpty() || charge < q_cut_low) {
       // std::cerr << "Error: PDS cluster vectors are empty!" << std::endl;
       continue; // Skip empty clusters
     }
@@ -184,6 +188,7 @@ void fm_ana(){
       std::cout << "-! " << true_tpc_cluster.time_tpc << "-" << std::endl;
     }
     float true_loglikelihood = likelihood_computer.GetLikelihoodMatch(true_tpc_cluster, true_pds_cluster);
+    float e_reco = likelihood_computer.E_reco;
     if (std::isinf(true_loglikelihood)) ninfinity++;
 
     h2_xreco_xtrue->Fill(x_true, likelihood_computer.x_reco);
@@ -203,7 +208,7 @@ void fm_ana(){
       if (delta_time < 0) continue; // Skip combinations where TPC time is before PDS time
       
       float fake_loglikelihood = likelihood_computer.GetLikelihoodMatch(fake_tpc_clusters[i], true_pds_cluster);
-      // float fake_loglikelihood = 55; 
+
       h_LL->Fill(-true_loglikelihood);
       h_LL_fake->Fill(-fake_loglikelihood);
       ntry++;
@@ -216,6 +221,7 @@ void fm_ana(){
         h_dy_mis->Fill(true_vertex_info.y - fake_vertex_info[i].y);
         h_dz_mis->Fill(true_vertex_info.z - fake_vertex_info[i].z);
         h_de_mis->Fill(true_vertex_info.energy - fake_vertex_info[i].energy);
+        h_ErecoEtrue_mis->Fill(e_reco/true_vertex_info.energy);
         h2_de_dx_mis->Fill(true_vertex_info.x - fake_vertex_info[i].x, true_vertex_info.energy - fake_vertex_info[i].energy);
         h2_de_dy_mis->Fill(true_vertex_info.y - fake_vertex_info[i].y, true_vertex_info.energy - fake_vertex_info[i].energy);
         h2_de_dz_mis->Fill(true_vertex_info.z - fake_vertex_info[i].z, true_vertex_info.energy - fake_vertex_info[i].energy);
@@ -248,6 +254,7 @@ void fm_ana(){
   h_dy_mis->Write();
   h_dz_mis->Write();
   h_de_mis->Write();
+  h_ErecoEtrue_mis->Write();
   h2_de_dx_mis->Write();
   h2_de_dy_mis->Write();
   h2_de_dz_mis->Write();
@@ -255,7 +262,6 @@ void fm_ana(){
   h2_Ereco_Etrue->Write();
   h2_Ydiff_Zdiff->Write();
   h2_exp_reco->Write();
-  likelihood_computer.g_logms->Write();
   out_file->Close();
 
   calib_file->Close();

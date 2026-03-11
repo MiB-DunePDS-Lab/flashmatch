@@ -112,7 +112,6 @@ public:
 
   float E_reco;
   float x_reco;
-  TGraphErrors* g_logms;
   TF1* f_reco_prob;
 
   float GetLikelihoodMatch(const ClusterTPC& tpc_cluster,
@@ -128,7 +127,7 @@ public:
     vertex_coor[2] = std::max(vertex_coor[2], tpc_min[2]+15); vertex_coor[2] = std::min(vertex_coor[2], tpc_max[2]-15);
     int tpc_index = GetTPCIndex(vertex_coor, hgrid, cryo_to_tpc);
 
-    float x_min_g_logms = g_logms->GetX()[0];
+    float x_min_g_par1s = g_par1->GetX()[0];
 
     float log_likelihood = 0.;
 
@@ -148,11 +147,11 @@ public:
 
       if (reco_pe>0.0){
         if (reco_pe > trend_thr){
-          f_lognormal->SetParameters(f_logms_trend->Eval(exp_ph), f_sigmas_trend->Eval(exp_ph));
-          log_likelihood += log(P_hit_mu*f_lognormal->Eval(reco_pe));
+          f_RecoExpDistr->SetParameters(f_par1_trend->Eval(exp_ph), f_par2_trend->Eval(exp_ph));
+          log_likelihood += log(P_hit_mu*f_RecoExpDistr->Eval(reco_pe));
         } else {
-          f_lognormal->SetParameters(g_logms->Eval(exp_ph), g_sigmas->Eval(exp_ph));
-          log_likelihood += log(P_hit_mu*f_lognormal->Eval(reco_pe));
+          f_RecoExpDistr->SetParameters(g_par1->Eval(exp_ph), g_par2->Eval(exp_ph));
+          log_likelihood += log(P_hit_mu*f_RecoExpDistr->Eval(reco_pe));
         }
       } else {
         log_likelihood += log(1. - P_hit_mu);
@@ -168,11 +167,11 @@ public:
                      float drift_velocity,
                      float LY_times_PDE,
                      TF1* f_reco_prob,
-                     TF1* f_lognormal,
-                     TF1* f_logms_trend,
-                     TF1* f_sigmas_trend,
-                     TGraphErrors* g_logms,
-                     TGraphErrors* g_sigmas,
+                     TF1* f_RecoExpDistr,
+                     TF1* f_par1_trend,
+                     TF1* f_par2_trend,
+                     TGraphErrors* g_par1,
+                     TGraphErrors* g_par2,
                      double trend_thr,
                      float calib_c, 
                      float calib_slope, 
@@ -183,11 +182,11 @@ public:
     drift_velocity(drift_velocity),
     LY_times_PDE(LY_times_PDE),
     f_reco_prob(f_reco_prob),
-    f_lognormal(f_lognormal),
-    f_logms_trend(f_logms_trend),
-    f_sigmas_trend(f_sigmas_trend),
-    g_logms(g_logms),
-    g_sigmas(g_sigmas),
+    f_RecoExpDistr(f_RecoExpDistr),
+    f_par1_trend(f_par1_trend),
+    f_par2_trend(f_par2_trend),
+    g_par1(g_par1),
+    g_par2(g_par2),
     trend_thr(trend_thr),
     calib_c(calib_c), 
     calib_slope(calib_slope), 
@@ -203,11 +202,12 @@ private:
   float drift_velocity;
   float LY_times_PDE;
   std::vector<std::vector<float>> opDet_visMapDirect;
-  TF1* f_lognormal;
-  TF1* f_logms_trend;
-  TF1* f_sigmas_trend;
+  TF1* f_RecoExpDistr;
+  TF1* f_par1_trend;
+  TF1* f_par2_trend;
   double trend_thr;
-  TGraphErrors* g_sigmas;
+  TGraphErrors* g_par1;
+  TGraphErrors* g_par2;
   float calib_c, calib_slope, corr_lambda;
   TH2D* h2_exp_reco = nullptr; // Optional, can be nullptr
 

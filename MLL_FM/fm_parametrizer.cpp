@@ -4,27 +4,29 @@
 #include <TH2D.h>
 #include <TF1.h>
 #include <TEfficiency.h>
+#include <TROOT.h>
 #include "Utils.hpp"
 
 
 void fm_parametrizer(){
+  gROOT->SetBatch(kTRUE);
   // --- CONFIGS ---------------------------------------------------------------
   MLLcconfigs f = load_ana_config("./config.json");
-  std::string input_dir = f.input_dir;
-  double fit_trend_low = f.fit_trend_low;
-  double fit_trend_up  = f.fit_trend_up;
-  bool rebin_h2        = f.rebin_h2;
-  int rebinning        = f.rebinning;
+  std::string input_dir    = f.input_dir;
+  std::string distribution = f.distribution;
+  double fit_trend_low     = f.fit_trend_low;
+  double fit_trend_up      = f.fit_trend_up;
+  bool rebin_h2            = f.rebin_h2;
+  int rebinning            = f.rebinning;
   
   // --- INPUTS ---------------------------------------------------------------
   TFile* distribution_file = TFile::Open((input_dir+"MLL_Distributions.root").c_str(), "READ");
   TH2D* h2_exp_reco        = static_cast<TH2D*>(distribution_file->Get("h2_exp_reco"));
   TEfficiency* he_hit_prob = static_cast<TEfficiency*>(distribution_file->Get("he_hit_prob"));
-  
-  // ========================
-  //      Fit Prob
-  // ========================
-  
+ 
+
+  // --- FIT ------------------------------------------------------------------
+  // Fit reco probability -----------------------------------------------------  
   TF1* f_reco_prob_fit = new TF1("f_hit_prob_fit", sigmoid_sigmoid_erf, 0., 60., 6); // To fit only in a short range
   f_reco_prob_fit->SetParNames("amp1","x0_1","slope1","amp2","x0_2","slope2");
   f_reco_prob_fit->SetNpx(3000);
@@ -36,12 +38,20 @@ void fm_parametrizer(){
   f_reco_prob->SetNpx(3000);
   f_reco_prob->SetParameters(f_reco_prob_fit->GetParameters());
 
-  // TF1* f_lognormal = new TF1("f_lognormal", "ROOT::Math::lognormal_pdf(x,[0],[1])", 0, 2000);
-  TF1* f_lognormal = new TF1("f_lognormal", gamma_dist, 0., 2000., 2);
-  f_lognormal->SetParNames("log(m)", "#sigma");
-  f_lognormal->SetNpx(3000);
-  std::vector<double> logms, sigmas, exp_phs;
-  std::vector<double> err_logms, err_sigmas, err_exp_phs;
+  // Create and fit the reco|expected distributions ---------------------------
+  TF1* f_RecoExpDistr = nullptr;
+  if (distribution == "lognormal") {
+    f_RecoExpDistr = new TF1("f_RecoExpDistr", "ROOT::Math::lognormal_pdf(x,[0],[1])", 0, 2000);
+    f_RecoExpDistr->SetParNames("log(m)", "#sigma");
+  }
+  else {
+    f_RecoExpDistr = new TF1("f_RecoExpDistr", gamma_dist, 0., 2000., 2);
+    f_RecoExpDistr->SetParNames("k", "theta");
+  }
+  f_RecoExpDistr->SetNpx(3000);
+
+  std::vector<double> par1s, par2s, exp_phs;
+  std::vector<double> err_par1, err_par2, err_exp_phs;
   
   TFile* out_file = TFile::Open((input_dir+"MLL_Parametrizer.root").c_str(), "RECREATE");
   out_file->mkdir("projections");
@@ -59,15 +69,17 @@ void fm_parametrizer(){
       double mean   = h1_proj->GetBinCenter(h1_proj->GetMaximumBin());
       double stddev = h1_proj->GetStdDev();
 
-      // f_lognormal->SetParameters(log(mean), 0.25);
-      // f_lognormal->SetParLimits(0, log(mean-5*stddev), log(mean+5*stddev));
-      f_lognormal->SetParameters(mean, 1.);
-      f_lognormal->SetParLimits(0, mean-5*stddev, mean+5*stddev);
-      // f_lognormal->FixParameter(0, mean);
-      // f_lognormal->FixParameter(1, 1.);
+      if (distribution == "lognormal") {
+        f_RecoExpDistr->SetParameters(log(mean), 0.25);
+        f_RecoExpDistr->SetParLimits(0, log(mean-5*stddev), log(mean+5*stddev));
+      }
+      else {
+        f_RecoExpDistr->SetParameters(mean, 1.);
+        f_RecoExpDistr->SetParLimits(0, mean-5*stddev, mean+5*stddev);
+      }
 
       TFitResultPtr fit_res = nullptr;
-      if (h1_proj->GetEntries() > 400) fit_res = h1_proj->Fit(f_lognormal, "Q", "", std::max(0.,mean-5*stddev), mean+5*stddev);
+      if (h1_proj->GetEntries() > 400) fit_res = h1_proj->Fit(f_RecoExpDistr, "Q", "", std::max(0.,mean-5*stddev), mean+5*stddev);
       h1_proj->SetName(Form("h1_proj_%i_pe", (int)h2_exp_reco->GetYaxis()->GetBinCenter(idx_y)));
       h1_proj->Write();
 
@@ -80,65 +92,61 @@ void fm_parametrizer(){
       // if (reco > 400) break; // Stop if reco is greater than 40
       if (exp_ph > 0 && h1_proj->GetEntries() > 400 && fit_res==0){
         exp_phs.push_back(exp_ph);                       err_exp_phs.push_back(0);
-        logms.push_back(f_lognormal->GetParameter(0));   err_logms.push_back(f_lognormal->GetParError(0));
-        sigmas.push_back(f_lognormal->GetParameter(1));  err_sigmas.push_back(f_lognormal->GetParError(1));
+        par1s.push_back(f_RecoExpDistr->GetParameter(0));   err_par1.push_back(f_RecoExpDistr->GetParError(0));
+        par2s.push_back(f_RecoExpDistr->GetParameter(1));  err_par2.push_back(f_RecoExpDistr->GetParError(1));
       }
     }
   } // handle h2_exp_reco and fit lognormal_pdf
 
 
-  // --- TGRAPHS ------------------------------------------------
-  TGraphErrors* g_logms = new TGraphErrors(logms.size(), &exp_phs[0], &logms[0], &err_exp_phs[0], &err_logms[0]);
-  g_logms->SetTitle("log(MPV) vs Expected Photons;#Expected Photons;log(MPV)");
-  g_logms->SetName("g_logms");
+  // --- TGRAPHS --------------------------------------------------------------
+  TGraphErrors* g_par1 = new TGraphErrors(par1s.size(), &exp_phs[0], &par1s[0], &err_exp_phs[0], &err_par1[0]);
+  g_par1->SetTitle("log(MPV) vs Expected Photons;#Expected Photons;log(MPV)");
+  g_par1->SetName("g_par1");
 
-  TGraphErrors* g_sigmas = new TGraphErrors(sigmas.size(), &exp_phs[0], &sigmas[0], &err_exp_phs[0], &err_sigmas[0]);
-  g_sigmas->SetTitle("#sigma vs Expected Photons;#Expected Photons;#sigma");
-  g_sigmas->SetName("g_sigmas");
+  TGraphErrors* g_par2 = new TGraphErrors(par2s.size(), &exp_phs[0], &par2s[0], &err_exp_phs[0], &err_par2[0]);
+  g_par2->SetTitle("#sigma vs Expected Photons;#Expected Photons;#sigma");
+  g_par2->SetName("g_par2");
   
-  // Fit the parameter trends
+  // Fit the parameter trends -------------------------------------------------
+  TF1* f_par1_trend = nullptr;
+  TF1* f_par2_trend = nullptr;
+  if (distribution == "lognormal") {
+    f_par1_trend = new TF1("f_par1_trend", "[0]+[1]*log(x+[2])", 0., 2000);
+    f_par1_trend->SetParNames("offset","log_slope","linear_slope");
+    f_par1_trend->SetParameters(-0.5,1.2,1.0);  
+    f_par1_trend->SetParLimits(1, 0.0, 5.0);
+    f_par1_trend->SetParLimits(2,-3.0, 10.0);
   
-  // ========================
-  //      Fit logms
-  // ========================
+    f_par2_trend = new TF1("f_par2_trend","([0] + [1]*x + [2]*x*x)/(1 + [3]*x + [4]*x*x)", 0., 2000);
+    f_par2_trend->SetParameters(0.6, 0.01,0.0001,0.05,0.0002);
+    f_par2_trend->SetParLimits(2,0,10);    
+    f_par2_trend->SetParLimits(4,0,10);   
+  }
+  else {
+    f_par1_trend = new TF1("f_par1_trend", "[0]+[1]*x", 0., 2000.);
+    f_par1_trend->SetParNames("const", "log_slope");
+    f_par1_trend->SetParameters(.5, 1.2);
   
-  TF1* f_logms_trend = new TF1("f_logms_trend", "[0]+[1]*log(x+[2])", 0.4, 2000);
-  f_logms_trend->SetParNames("offset","log_slope","linear_slope");
-  f_logms_trend->SetParameters(-0.5,1.2,1.0);  
-  f_logms_trend->SetParLimits(1, 0.0, 5.0);
-  f_logms_trend->SetParLimits(2,-3.0, 10.0);
-  // TF1* f_logms_trend = new TF1("f_logms_trend", "[0]+[1]*x", 0., 2000.);
-  // f_logms_trend->SetParNames("const", "log_slope");
-  // f_logms_trend->SetParameters(.5, 1.2);
-  // f_logms_trend->SetNpx(3000);
-  // g_logms->Fit(f_logms_trend, "R");
-  g_logms->Fit(f_logms_trend, "", "", fit_trend_low, fit_trend_up); 
-  
-  // ========================
-  //      Fit sigma
-  // ========================
-      
-  TF1* f_sigmas_trend = new TF1("f_sigmas_trend","([0] + [1]*x + [2]*x*x)/(1 + [3]*x + [4]*x*x)", 3.0, 2000);
-  f_sigmas_trend->SetParameters(0.6, 0.01,0.0001,0.05,0.0002);
-  // TF1* f_sigmas_trend = new TF1("f_sigmas_trend", "[2]+[1]*sqrt([0]*x)", 0., 2000.);
-  // f_sigmas_trend->SetParNames("b", "A", "const");
-  // f_sigmas_trend->SetParameters(2., 1., -0.5);
-  f_sigmas_trend->SetNpx(3000);
-  f_sigmas_trend->SetParLimits(4,0,10);   
-  f_sigmas_trend->SetParLimits(2,0,10);    
-  g_sigmas->Fit(f_sigmas_trend, "", "", fit_trend_low, fit_trend_up);
+    f_par2_trend = new TF1("f_par2_trend", "[2]+[1]*sqrt([0]*x)", 0., 2000.);
+    f_par2_trend->SetParNames("b", "A", "const");
+    f_par2_trend->SetParameters(2., 1., -0.5);
+  }
+  f_par1_trend->SetNpx(3000); f_par2_trend->SetNpx(3000);
+  g_par1->Fit(f_par1_trend, "", "", fit_trend_low, fit_trend_up); 
+  g_par2->Fit(f_par2_trend, "", "", fit_trend_low, fit_trend_up);
 
 
   out_file->cd();
   he_hit_prob->Write();
   h2_exp_reco->Write();
   f_reco_prob->Write();
-  f_lognormal->SetParameters(f_logms_trend->Eval(20.), f_sigmas_trend->Eval(20.));
-  f_lognormal->Write();
-  f_logms_trend->Write();
-  f_sigmas_trend->Write();
-  g_logms->Write();
-  g_sigmas->Write();
+  f_RecoExpDistr->SetParameters(f_par1_trend->Eval(20.), f_par2_trend->Eval(20.));
+  f_RecoExpDistr->Write();
+  f_par1_trend->Write();
+  f_par2_trend->Write();
+  g_par1->Write();
+  g_par2->Write();
   out_file->Close();
   
   distribution_file->Close();
