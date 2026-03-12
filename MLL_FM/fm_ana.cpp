@@ -16,9 +16,14 @@ void fm_ana(){
   // --- CONFIGS ---------------------------------------------------------------
   MLLcconfigs f = load_ana_config("./config.json");
   std::string input_dir        = f.input_dir;
+  float light_yield            = f.light_yield;
+  float arapuca_pde            = f.arapuca_pde;
+  size_t n_opdet               = f.n_opdet;
   TString visibility_file_name = f.visibility_file_name;
   double trend_thr             = f.trend_thr;
   double q_cut_low             = f.q_cut_low;
+  float LY_times_PDE           = light_yield * arapuca_pde;
+  
 
   // --- INPUTS ---------------------------------------------------------------
   TFile* calib_file = TFile::Open((input_dir+"MLL_Calibrator.root").c_str(), "READ");
@@ -53,13 +58,6 @@ void fm_ana(){
   tpc_pds_tree->SetBranchAddress("y_true", &y_true);
   tpc_pds_tree->SetBranchAddress("z_true", &z_true);
   tpc_pds_tree->SetBranchAddress("e_true", &e_true);
-
-  TTree* pds_tree = static_cast<TTree*>(distribution_file->Get("pds_tree"));
-  size_t n_opdet = 0; float LY_times_PDE = 0.;
-  pds_tree->SetBranchAddress("n_opdet", &n_opdet);
-  pds_tree->SetBranchAddress("LY_times_PDE", &LY_times_PDE);
-  pds_tree->GetEntry(0); // Read the first entry to get the parameters
-  // TH2D* h2_exp_reco = static_cast<TH2D*>(distribution_file->Get("h2_exp_reco_norm"));
 
   TFile* parametrizer_file  = TFile::Open((input_dir+"MLL_Parametrizer.root").c_str(), "READ");
   TF1* f_reco_prob          = static_cast<TF1*>(parametrizer_file->Get("f_reco_prob"));
