@@ -69,10 +69,17 @@ void fm_ana(){
   TGraphErrors* g_par2      = static_cast<TGraphErrors*>(parametrizer_file->Get("g_par2"));
 
   // --- HISTOS -----------------------------------------------------------------
-  TH1D* h_LL = new TH1D("h_LL",Form("%s;%s;%s","h_LL","LL","counts"),
-                        200, 0., 600.);
-  TH1D* h_LL_fake = new TH1D("h_LL_fake",Form("%s;%s;%s","h_LL_fake","LL_fake","counts"),
-                             200, 0., 600.);
+  TH1D* h_TrueRecoTerms = new TH1D("h_TrueRecoTerms",Form("%s;%s;%s","h_TrueRecoTerms","Reco Terms for True Match","counts"),
+                                    200, 0, 100);
+
+  TH1D* h_TrueNoRecoTerms = new TH1D("h_TrueNoRecoTerms",Form("%s;%s;%s","h_TrueNoRecoTerms","NoReco Terms for True Match","counts"),
+                                    200, 0, 100);
+
+  TH1D* h_FakeRecoTerms = new TH1D("h_FakeRecoTerms",Form("%s;%s;%s","h_FakeRecoTerms","Reco Terms for Fake Match","counts"),
+                                    200, 0, 100);
+
+  TH1D* h_FakeNoRecoTerms = new TH1D("h_FakeNoRecoTerms",Form("%s;%s;%s","h_FakeNoRecoTerms","NoReco Terms for Fake Match","counts"),
+                                    200, 0, 100);
 
   TH1D* h_x_mis = new TH1D("h_x_mis",Form("%s;%s;%s","h_x_mis","x [cm]","counts"),
                           100, -350, 350);
@@ -151,9 +158,11 @@ void fm_ana(){
 
   // --- LOOP OVER TPC-PDS CLUSTERS ---------------------------------------------
   float ntry = 0; float nmismatch = 0; float ninfinity = 0;
+  std::vector<float> LLs_true, LLs_fake, LLs_true_scaled;
   std::vector<ClusterTPC> fake_tpc_clusters;
   std::vector<VertexInfo> fake_vertex_info;
   // for (Long64_t entry = 0; entry < tpc_pds_tree->GetEntries(); entry++) {
+  // for (Long64_t entry = 0; entry < 10000; entry++) {
   for (size_t entry : MaxChargeIndxs) {
     tpc_pds_tree->GetEntry(entry);
     // time_pds = -18;
@@ -185,7 +194,13 @@ void fm_ana(){
     if (delta_time < 0) {
       std::cout << "-! " << true_tpc_cluster.time_tpc << "-" << std::endl;
     }
-    float true_loglikelihood = likelihood_computer.GetLikelihoodMatch(true_tpc_cluster, true_pds_cluster);
+
+    std::vector<float> true_reco_terms, true_noreco_terms;
+    float true_loglikelihood = likelihood_computer.GetLikelihoodMatch(true_tpc_cluster, true_pds_cluster, true_reco_terms, true_noreco_terms);
+    // std::cout << "vvvv " << -true_loglikelihood << std::endl;
+    LLs_true.push_back(-true_loglikelihood);
+    for (auto& term : true_reco_terms) h_TrueRecoTerms->Fill(-term);
+    for (auto& term : true_noreco_terms) h_TrueNoRecoTerms->Fill(-term);
     float e_reco = likelihood_computer.E_reco;
     if (std::isinf(true_loglikelihood)) ninfinity++;
 
@@ -204,11 +219,14 @@ void fm_ana(){
       }
       delta_time = fake_tpc_clusters[i].time_tpc - true_pds_cluster.time_pds;
       if (delta_time < 0) continue; // Skip combinations where TPC time is before PDS time
-      
-      float fake_loglikelihood = likelihood_computer.GetLikelihoodMatch(fake_tpc_clusters[i], true_pds_cluster);
+     
+      std::vector<float> fake_reco_terms, fake_noreco_terms;
+      float fake_loglikelihood = likelihood_computer.GetLikelihoodMatch(fake_tpc_clusters[i], true_pds_cluster, fake_reco_terms, fake_noreco_terms);
 
-      h_LL->Fill(-true_loglikelihood);
-      h_LL_fake->Fill(-fake_loglikelihood);
+      LLs_true_scaled.push_back(-true_loglikelihood);
+      LLs_fake.push_back(-fake_loglikelihood);
+      for (auto& term : fake_reco_terms) h_FakeRecoTerms->Fill(-term);
+      for (auto& term : fake_noreco_terms) h_FakeNoRecoTerms->Fill(-term);
       ntry++;
       if (fake_loglikelihood>true_loglikelihood) {
         nmismatch++;
@@ -236,20 +254,52 @@ void fm_ana(){
     fake_tpc_clusters[fake_tpc_clusters.size()-1] = true_tpc_cluster;
     fake_vertex_info[fake_vertex_info.size()-1] = true_vertex_info;
   }
+
+  // sort LLs_true
+  std::sort(LLs_true.begin(), LLs_true.end());
+  double hLL_min = LLs_true[0];
+  double hLL_max = LLs_true[size_t(LLs_true.size()*0.97)];
+
+  TH1D* h_LL = new TH1D("h_LL",Form("%s;%s;%s","h_LL","LL","counts"),
+                        200, hLL_min, hLL_max);
+  TH1D* h_LL_scale = new TH1D("h_LL_scale",Form("%s;%s;%s","h_LL_scale","LL","counts"),
+                        200, hLL_min, hLL_max);
+  TH1D* h_LL_fake = new TH1D("h_LL_fake",Form("%s;%s;%s","h_LL_fake","LL_fake","counts"),
+                             200, hLL_min, hLL_max);
+
+  for (auto& ll : LLs_true) h_LL->Fill(ll);
+  for (auto& ll : LLs_true_scaled) h_LL_scale->Fill(ll);
+  for (auto& ll : LLs_fake) h_LL_fake->Fill(ll);
+  LLs_true.clear(); LLs_true_scaled.clear(); LLs_fake.clear();
+
   std::cout << "Mismatch: " << nmismatch << "/" << ntry << "\t" << nmismatch/ntry*100 << std::endl;
   std::cout << "of which "  << ninfinity << "/" << nmismatch << " are infinite" << std::endl;
+  std::printf("True matches : %.0f (%.3f%%) of reco_terms and %.0f (%.3f%%) of non-reco\n",
+              h_TrueRecoTerms->GetEntries(), h_TrueRecoTerms->GetEntries()/(n_opdet*h_LL->GetEntries())*100,
+              h_TrueNoRecoTerms->GetEntries(), h_TrueNoRecoTerms->GetEntries()/(n_opdet*h_LL->GetEntries())*100);
+  std::printf("False matches %.0f (%.3f%%) of reco_terms and %.0f (%.3f%%) of non-reco\n",
+              h_FakeRecoTerms->GetEntries(), h_FakeRecoTerms->GetEntries()/(n_opdet*h_LL_fake->GetEntries())*100,
+              h_FakeNoRecoTerms->GetEntries(), h_FakeNoRecoTerms->GetEntries()/(n_opdet*h_LL_fake->GetEntries())*100);
+  
 
   // --- WRITE OUTPUT ----------------------------------------------------------
   TFile* out_file = TFile::Open((input_dir+"MLL_AnaOutput.root").c_str(), "RECREATE");
   out_file->cd();
   h_LL->Write();
+  h_LL_scale->Write();
   h_LL_fake->Write();
+  h_TrueRecoTerms->Write();
+  h_TrueNoRecoTerms->Write();
+  h_FakeRecoTerms->Write();
+  h_FakeNoRecoTerms->Write();
   h_dx->Write();
   h_x_mis->Write();
   h_y_mis->Write();
   h_z_mis->Write();
   h_dx_mis->Write();
   h_dy_mis->Write();
+  g_par1->Write();
+  g_par2->Write();
   h_dz_mis->Write();
   h_de_mis->Write();
   h_ErecoEtrue_mis->Write();
