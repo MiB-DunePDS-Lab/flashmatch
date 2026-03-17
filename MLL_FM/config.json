@@ -10,6 +10,7 @@
   "pe_up": 300,
   "light_yield": 20000,
   "arapuca_pde": 0.03,
+  "n_opdet": 480,
   "min_visibility": 1e-15,
   "yz_fiducial_cut": 40,
   "x_fiducial_cut": 50,

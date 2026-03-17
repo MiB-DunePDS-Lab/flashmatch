@@ -2,6 +2,8 @@
 #define FLASH_MATCHER_HPP
 
 #include <TFile.h>
+#include <cmath>
+#include <numeric>
 
 #include "Utils.hpp"
 
@@ -115,7 +117,12 @@ public:
   TF1* f_reco_prob;
 
   float GetLikelihoodMatch(const ClusterTPC& tpc_cluster,
-                           const ClusterPDS& pds_cluster){
+                           const ClusterPDS& pds_cluster,
+                           std::vector<float>& reco_terms,
+                           std::vector<float>& noreco_terms){
+
+    if (reco_terms.size() >= 0) reco_terms.clear();
+    if (noreco_terms.size() >= 0) noreco_terms.clear();
     
     float delta_time = tpc_cluster.time_tpc - pds_cluster.time_pds ;
     E_reco = give_me_Ereco(calib_c, calib_slope, corr_lambda, delta_time, tpc_cluster.charge);
@@ -130,12 +137,23 @@ public:
     float x_min_g_par1s = g_par1->GetX()[0];
 
     float log_likelihood = 0.;
+    // std::cout << "yyy" << log_likelihood << std::endl;
+    float term = 0.;
+    float n_hit = 0.;
+    // find how many entries in reco_pes are > 0.
+    n_hit = std::count_if(pds_cluster.reco_pes->begin(), pds_cluster.reco_pes->end(), [](float pe){ return pe > 0; });
 
     if (n_opdet != pds_cluster.reco_pes->size()){
       std::cerr << "Error: Number of OPDet does not match the size of reco_pes vector!" << std::endl;
       exit(1);
     }
 
+    // float weight_hit = 1.;
+    float weight_hit = 1./(n_hit*n_hit);
+    // float weight_unhit = 1.;
+    float weight_unhit = 1./(n_hit*n_hit);
+    float weight_sum = 1.;
+    // float weight_sum = 1./(std::accumulate(pds_cluster.reco_pes->begin(), pds_cluster.reco_pes->end(), 0.));
     for (size_t idx_opdet=0; idx_opdet<pds_cluster.reco_pes->size(); idx_opdet++){
       float voxel_vis = opDet_visMapDirect[tpc_index][idx_opdet];// + opDet_visMapReflct[tpc_index][idx_opdet];
 
@@ -146,19 +164,34 @@ public:
       reco_pe = pds_cluster.reco_pes->at(idx_opdet);
 
       if (reco_pe>0.0){
+        n_hit++;
         if (reco_pe > trend_thr){
           f_RecoExpDistr->SetParameters(f_par1_trend->Eval(exp_ph), f_par2_trend->Eval(exp_ph));
-          log_likelihood += log(P_hit_mu*f_RecoExpDistr->Eval(reco_pe));
+          term = log(P_hit_mu*f_RecoExpDistr->Eval(reco_pe))*weight_hit;
+          // term = log(P_hit_mu*f_RecoExpDistr->Eval(reco_pe)/f_RecoExpDistr->Eval(exp(f_par1_trend->Eval(exp_ph)-pow(f_par2_trend->Eval(exp_ph),2))))*weight_hit;
+          // term = log(P_hit_mu*f_RecoExpDistr->Integral(reco_pe-sqrt(reco_pe),reco_pe+sqrt(reco_pe)))*weight_hit;
+          log_likelihood += term;
+          reco_terms.push_back(term);
+          // std::cout <<  "t " << term << " " << log_likelihood << std::endl;
         } else {
           f_RecoExpDistr->SetParameters(g_par1->Eval(exp_ph), g_par2->Eval(exp_ph));
-          log_likelihood += log(P_hit_mu*f_RecoExpDistr->Eval(reco_pe));
+          term = log(P_hit_mu*f_RecoExpDistr->Eval(reco_pe))*weight_hit;
+          // term = log(P_hit_mu*f_RecoExpDistr->Eval(reco_pe)/f_RecoExpDistr->Eval(exp(g_par1->Eval(exp_ph)-pow(g_par2->Eval(exp_ph),2))))*weight_hit;
+          // term = log(P_hit_mu*f_RecoExpDistr->Integral(reco_pe-sqrt(reco_pe), reco_pe+sqrt(reco_pe)))*weight_hit;
+          log_likelihood += (term);
+          reco_terms.push_back(term);
+          // std::cout << "d " << term << " " << log_likelihood << std::endl;
         }
       } else {
-        log_likelihood += log(1. - P_hit_mu);
+        term = log(1. - P_hit_mu)*weight_unhit;
+        log_likelihood += term;
+        noreco_terms.push_back(term);
+          // std::cout << "e " << term << " " << log_likelihood << std::endl;
       }
     }
 
-    return log_likelihood;
+    // std::cout << "xxx" << log_likelihood << std::endl;
+    return log_likelihood*weight_sum;
   } // GetLikelihoodMatch
 
   // LikelihoodComputer constructor

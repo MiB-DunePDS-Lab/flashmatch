@@ -1,4 +1,5 @@
 #include "RtypesCore.h"
+#include "TEfficiency.h"
 #include "TFile.h"
 #include "TROOT.h"
 #include "TString.h"
@@ -22,12 +23,12 @@ void fm_distributions(){
   float pe_up                      = f.pe_up;
   float light_yield                = f.light_yield;
   float arapuca_pde                = f.arapuca_pde;
-  float LY_times_PDE               = light_yield * arapuca_pde; // Light yield times the arapuca pde
+  const size_t n_opdet             = f.n_opdet;
   float min_visibility             = f.min_visibility;
   float fiducial_cut               = f.yz_fiducial_cut;
   float x_cut                      = f.x_fiducial_cut;
+  float LY_times_PDE               = light_yield * arapuca_pde; // Light yield times the arapuca pde
 
-  size_t n_opdet = NOPDET;
 
   // --- INPUTS ---------------------------------------------------------------
   // Calibration fit + correction lambda and drift velocity
@@ -240,15 +241,9 @@ void fm_distributions(){
   he_hit_prob->SetTitle("Hit Probability;Expected #Pe;Reconstruction Probability");
   he_hit_prob->SetName("he_hit_prob");
 
-  TTree* pds_tree = new TTree("pds_tree", "pds_tree");
-  pds_tree->Branch("n_opdet", &n_opdet);
-  pds_tree->Branch("LY_times_PDE", &LY_times_PDE);
-  pds_tree->Fill();
-
   // --- WRITE OUTPUT ---------------------------------------------------------
   out_file->cd();
   tpc_pds_tree->Write();
-  pds_tree->Write();
   h_exp->Write();
   h_expreco->Write();
   he_hit_prob->Write();

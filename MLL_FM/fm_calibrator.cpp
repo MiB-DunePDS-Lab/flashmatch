@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <cstddef>
 #include <filesystem>
-#include <iterator>
 #include <tuple>
 #include <vector>
 
@@ -57,7 +56,7 @@ void fm_calibrator(){
    
     for (auto& idx_entry : MaxChargeIndxs){
       treeReader.SetEntry(idx_entry);
-      if (!(*MatchedOpFlashCorrectly) || *Charge<min_charge_cut) continue;
+      if (!(*MatchedOpFlashCorrectly) || *Charge<q_cut_low || *Charge>q_cut_high) continue;
       float driftTime = abs((*x_true)/drift_velocity);
       true_calib_info.push_back(std::make_tuple(*Charge, *E_true, driftTime, *Charge/(*E_true)));
     }
