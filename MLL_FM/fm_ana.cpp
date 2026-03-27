@@ -124,8 +124,8 @@ void fm_ana(){
 
   TH2D* h2_xreco_xtrue = new TH2D("h2_xreco_xtrue",
                                   Form("%s;%s;%s", "h2_xreco_xtrue", "X_{true}", "X_{reco}"),
-                                  200, 0, 360,
-                                  200, 0, 360);
+                                  200, -360, 360,
+                                  200, -360, 360);
 
   TH2D* h2_Ereco_Etrue = new TH2D("h2_Ereco_Etrue",
                                   Form("%s;%s;%s", "h2_Ereco_Etrue", "E_{true} [MeV]", "E_{reco} [MeV]"),
@@ -158,6 +158,7 @@ void fm_ana(){
 
   // --- LOOP OVER TPC-PDS CLUSTERS ---------------------------------------------
   float ntry = 0; float nmismatch = 0; float ninfinity = 0;
+  float x_sign = 0.;
   std::vector<float> LLs_true, LLs_fake, LLs_true_scaled;
   std::vector<ClusterTPC> fake_tpc_clusters;
   std::vector<VertexInfo> fake_vertex_info;
@@ -165,6 +166,7 @@ void fm_ana(){
   // for (Long64_t entry = 0; entry < 10000; entry++) {
   for (size_t entry : MaxChargeIndxs) {
     tpc_pds_tree->GetEntry(entry);
+    x_sign = (x_true <= 0) ? -1. : 1.;
     // time_pds = -18;
     // if (time_pds > -13.8) continue;
 
@@ -196,7 +198,7 @@ void fm_ana(){
     }
 
     std::vector<float> true_reco_terms, true_noreco_terms;
-    float true_loglikelihood = likelihood_computer.GetLikelihoodMatch(true_tpc_cluster, true_pds_cluster, true_reco_terms, true_noreco_terms);
+    float true_loglikelihood = likelihood_computer.GetLikelihoodMatch(true_tpc_cluster, true_pds_cluster, true_reco_terms, true_noreco_terms, x_sign);
     // std::cout << "vvvv " << -true_loglikelihood << std::endl;
     LLs_true.push_back(-true_loglikelihood);
     for (auto& term : true_reco_terms) h_TrueRecoTerms->Fill(-term);
@@ -221,7 +223,7 @@ void fm_ana(){
       if (delta_time < 0) continue; // Skip combinations where TPC time is before PDS time
      
       std::vector<float> fake_reco_terms, fake_noreco_terms;
-      float fake_loglikelihood = likelihood_computer.GetLikelihoodMatch(fake_tpc_clusters[i], true_pds_cluster, fake_reco_terms, fake_noreco_terms);
+      float fake_loglikelihood = likelihood_computer.GetLikelihoodMatch(fake_tpc_clusters[i], true_pds_cluster, fake_reco_terms, fake_noreco_terms, x_sign);
 
       LLs_true_scaled.push_back(-true_loglikelihood);
       LLs_fake.push_back(-fake_loglikelihood);

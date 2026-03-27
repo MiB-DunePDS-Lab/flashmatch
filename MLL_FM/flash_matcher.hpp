@@ -119,7 +119,8 @@ public:
   float GetLikelihoodMatch(const ClusterTPC& tpc_cluster,
                            const ClusterPDS& pds_cluster,
                            std::vector<float>& reco_terms,
-                           std::vector<float>& noreco_terms){
+                           std::vector<float>& noreco_terms,
+                           float x_sign = 1.) {
 
     if (reco_terms.size() >= 0) reco_terms.clear();
     if (noreco_terms.size() >= 0) noreco_terms.clear();
@@ -167,17 +168,17 @@ public:
         n_hit++;
         if (reco_pe > trend_thr){
           f_RecoExpDistr->SetParameters(f_par1_trend->Eval(exp_ph), f_par2_trend->Eval(exp_ph));
-          term = log(P_hit_mu*f_RecoExpDistr->Eval(reco_pe))*weight_hit;
+          // term = log(P_hit_mu*f_RecoExpDistr->Eval(reco_pe))*weight_hit;
           // term = log(P_hit_mu*f_RecoExpDistr->Eval(reco_pe)/f_RecoExpDistr->Eval(exp(f_par1_trend->Eval(exp_ph)-pow(f_par2_trend->Eval(exp_ph),2))))*weight_hit;
-          // term = log(P_hit_mu*f_RecoExpDistr->Integral(reco_pe-sqrt(reco_pe),reco_pe+sqrt(reco_pe)))*weight_hit;
+          term = log(P_hit_mu*f_RecoExpDistr->Integral(reco_pe-sqrt(reco_pe)*0.5, reco_pe+sqrt(reco_pe)*0.5))*weight_hit;
           log_likelihood += term;
           reco_terms.push_back(term);
           // std::cout <<  "t " << term << " " << log_likelihood << std::endl;
         } else {
           f_RecoExpDistr->SetParameters(g_par1->Eval(exp_ph), g_par2->Eval(exp_ph));
-          term = log(P_hit_mu*f_RecoExpDistr->Eval(reco_pe))*weight_hit;
+          // term = log(P_hit_mu*f_RecoExpDistr->Eval(reco_pe))*weight_hit;
           // term = log(P_hit_mu*f_RecoExpDistr->Eval(reco_pe)/f_RecoExpDistr->Eval(exp(g_par1->Eval(exp_ph)-pow(g_par2->Eval(exp_ph),2))))*weight_hit;
-          // term = log(P_hit_mu*f_RecoExpDistr->Integral(reco_pe-sqrt(reco_pe), reco_pe+sqrt(reco_pe)))*weight_hit;
+          term = log(P_hit_mu*f_RecoExpDistr->Integral(reco_pe-sqrt(reco_pe)*0.5, reco_pe+sqrt(reco_pe)*0.5))*weight_hit;
           log_likelihood += (term);
           reco_terms.push_back(term);
           // std::cout << "d " << term << " " << log_likelihood << std::endl;
@@ -191,6 +192,7 @@ public:
     }
 
     // std::cout << "xxx" << log_likelihood << std::endl;
+    x_reco *= x_sign;
     return log_likelihood*weight_sum;
   } // GetLikelihoodMatch
 

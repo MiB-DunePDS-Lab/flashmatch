@@ -30,15 +30,20 @@ void fm_Offline(){
   std::vector<size_t> MaxChargeIndxs = take_max_charge_indices(tree, "Event", "Charge");
   TTreeReader treeReader(tree);
   // True info
+  TTreeReaderValue<float> SignalParticleE(treeReader, "SignalParticleE");
   TTreeReaderValue<float> SignalParticleX(treeReader, "SignalParticleX");
+  TTreeReaderValue<float> SignalParticleY(treeReader, "SignalParticleY");
+  TTreeReaderValue<float> SignalParticleZ(treeReader, "SignalParticleZ");
   // Cluster stuff
   TTreeReaderValue<float> RecoY(treeReader, "RecoY");
   TTreeReaderValue<float> RecoZ(treeReader, "RecoZ");
   TTreeReaderValue<float> Charge(treeReader,"Charge");
   TTreeReaderValue<float> Time(treeReader,  "Time");
+  TTreeReaderValue<int>   TPC(treeReader, "TPC");
   // Adj. flashes stuff
   TTreeReaderArray<float> MAdjFlashResidual(treeReader, "AdjOpFlashResidual");
   TTreeReaderArray<float> MAdjFlashTime(treeReader, "AdjOpFlashTime");
+  TTreeReaderArray<float> MAdjFlashFast(treeReader, "AdjOpFlashFast");
   TTreeReaderArray<float> MAdjFlashPur(treeReader, "AdjOpFlashPur");
   TTreeReaderArray<int>   MAdjFlashNHits(treeReader, "AdjOpFlashNHits");
   TTreeReaderArray<float> MAdjFlashPE(treeReader, "AdjOpFlashPE");
@@ -48,6 +53,7 @@ void fm_Offline(){
   TTreeReaderValue<float> MatchedOpFlashPE(treeReader, "MatchedOpFlashPE");
   TTreeReaderArray<float> MatchedOpFlashPEperOpDet(treeReader, "MatchedOpFlashPEperOpDet");
   TTreeReaderValue<bool> MatchedOpFlashCorrectly(treeReader, "MatchedOpFlashCorrectly");
+
   
   // --- LikelihoodComputer -----------------------------------------------------
   TFile* calib_file = TFile::Open((input_dir+"MLL_Calibrator.root").c_str(), "READ");
@@ -120,6 +126,46 @@ void fm_Offline(){
 
   TH1D* h_bkgNoRecoTerms = new TH1D("h_bkgNoRecoTerms",Form("%s;%s;%s","h_bkgNoRecoTerms","NoReco Terms for bkg Match","counts"),
                                     200, 0, 100);
+  
+  // --- Output TTree -----------------------------------------------------------
+  TTree* mll_tree = new TTree("mll_tree", "mll_tree");
+  // True variables
+  float e_true = 0.; float x_true; float y_true; float z_true;
+  // Reco variables
+  float y_reco = 0.; float z_reco = 0.;
+  // Target viariables
+  int t_nhits = 0; float t_pe = 0.; float t_ereco = 0.; float t_xreco = 0.; float t_ll = 0.;
+  std::vector<float> t_reco_terms; std::vector<float> t_noreco_terms;
+  // MLL variables
+  int m_nhits = 0; float m_pe = 0.; float m_ereco = 0.; float m_xreco = 0.; float m_ll = 0.;
+  std::vector<float> m_reco_terms; std::vector<float> m_noreco_terms;
+
+  bool correct_match = false; bool target_match = false;
+  
+  // Create branches
+  mll_tree->Branch("e_true", &e_true, "e_true/F");
+  mll_tree->Branch("x_true", &x_true, "x_true/F");
+  mll_tree->Branch("y_true", &y_true, "y_true/F");
+  mll_tree->Branch("z_true", &z_true, "z_true/F");
+  mll_tree->Branch("y_reco", &y_reco, "y_reco/F");
+  mll_tree->Branch("z_reco", &z_reco, "z_reco/F");
+  mll_tree->Branch("t_nhits", &t_nhits, "t_nhits/I");
+  mll_tree->Branch("t_pe", &t_pe, "t_pe/F");
+  mll_tree->Branch("t_ereco", &t_ereco, "t_ereco/F");
+  mll_tree->Branch("t_xreco", &t_xreco, "t_xreco/F");
+  mll_tree->Branch("t_ll", &t_ll, "t_ll/F");
+  mll_tree->Branch("t_reco_terms", &t_reco_terms);
+  mll_tree->Branch("t_noreco_terms", &t_noreco_terms);
+  mll_tree->Branch("m_nhits", &m_nhits, "m_nhits/I");
+  mll_tree->Branch("m_pe", &m_pe, "m_pe/F");
+  mll_tree->Branch("m_ereco", &m_ereco, "m_ereco/F");
+  mll_tree->Branch("m_xreco", &m_xreco, "m_xreco/F");
+  mll_tree->Branch("m_ll", &m_ll, "m_ll/F");
+  mll_tree->Branch("m_reco_terms", &m_reco_terms);
+  mll_tree->Branch("m_noreco_terms", &m_noreco_terms);
+  mll_tree->Branch("correct_match", &correct_match, "correct_match/O");
+  mll_tree->Branch("target_match", &target_match, "target_match/O");
+
 
  
   // --- LOOP OVER ENTRIES ----------------------------------------------------
@@ -153,13 +199,16 @@ void fm_Offline(){
     for (size_t idx_flash=0; idx_flash<MAdjFlashResidual.GetSize(); idx_flash++){
       for(size_t j=0; j<n_opdet; j++) reco_pes[j] = MAdjFlashPEperOpDet.At(idx_flash*n_opdet + j);
 
+      float flash_fast = MAdjFlashFast.At(idx_flash);
       float flash_time = MAdjFlashTime.At(idx_flash);
       float flash_residual = MAdjFlashResidual.At(idx_flash);
       float flash_pe = MAdjFlashPE.At(idx_flash);
       float flash_nhits = MAdjFlashNHits.At(idx_flash);
       ClusterPDS pds_cluster = ClusterPDS(flash_time, &reco_pes);
+      float x_sign = (*TPC % 2 == 0) ? -1. : 1.;
     
-      float offline_likelihood = -likelihood_computer.GetLikelihoodMatch(tpc_cluster, pds_cluster, reco_terms, noreco_terms);
+      float offline_likelihood = -likelihood_computer.GetLikelihoodMatch(tpc_cluster, pds_cluster, reco_terms, noreco_terms, x_sign);
+      // offline_likelihood *= flash_fast; // Scale the likelihood by the flash fast component
 
       if (MAdjFlashPE.At(idx_flash) == *MatchedOpFlashPE && MAdjFlashTime.At(idx_flash) == *MatchedOpFlashTime){
         h_LL_target->Fill(offline_likelihood);
@@ -190,7 +239,16 @@ void fm_Offline(){
         idx_selected_max = idx_flash;
       }
       // Cheating: select the flash that matches the true flash
-      if (*MatchedOpFlashCorrectly) idx_selected_cheat = idx_flash;
+      if (*MatchedOpFlashCorrectly && MAdjFlashPE.At(idx_flash) == *MatchedOpFlashPE && MAdjFlashTime.At(idx_flash) == *MatchedOpFlashTime){
+        idx_selected_cheat = idx_flash;
+        t_ll = offline_likelihood;
+        t_nhits = flash_nhits;
+        t_pe = flash_pe;
+        t_ereco = likelihood_computer.E_reco;
+        t_xreco = likelihood_computer.x_reco;
+        t_reco_terms = reco_terms;
+        t_noreco_terms = noreco_terms;
+      }
 
       // Selection criteria for the matched flash
       float value = offline_likelihood;
@@ -199,6 +257,14 @@ void fm_Offline(){
         value_selected = value;
         idx_selected = idx_flash;
         purity = MAdjFlashPur.At(idx_flash);
+
+        m_ll = offline_likelihood;
+        m_nhits = flash_nhits;
+        m_pe = flash_pe;
+        m_ereco = likelihood_computer.E_reco;
+        m_xreco = likelihood_computer.x_reco;
+        m_reco_terms = reco_terms;
+        m_noreco_terms = noreco_terms;
       }
     } // End loop over adjacent flashes
     
@@ -211,7 +277,19 @@ void fm_Offline(){
 
     if (purity > 0.) n_match++;
     if(*MatchedOpFlashCorrectly) n_match_cheating++;
+
+    // Fill output tree
+    e_true = *SignalParticleE;
+    x_true = *SignalParticleX; y_true = *SignalParticleY; z_true = *SignalParticleZ;
+    y_reco = *RecoY; z_reco = *RecoZ;
+    correct_match = (purity > 0) ? true : false;
+    target_match = (idx_selected == idx_selected_cheat) ? true : false;
+   
+    if (idx_selected_cheat >= 0) mll_tree->Fill();
   } // End loop over entries
+  
+  
+  
   std::cout << "Method  : " << float(n_match)/float(n_try) << std::endl;
   std::cout << "Cheating: " << float(n_match_cheating)/float(n_try) << std::endl;
   std::cout << "N tries : " << n_try << std::endl;
@@ -226,6 +304,12 @@ void fm_Offline(){
               h_bkgRecoTerms->GetEntries(), h_bkgRecoTerms->GetEntries()/(n_opdet*h_LL_bkg->GetEntries())*100,
               h_bkgNoRecoTerms->GetEntries(), h_bkgNoRecoTerms->GetEntries()/(n_opdet*h_LL_bkg->GetEntries())*100);
 
+  printf("Total eff,\tTarget Avg -log(L),\tTarget Avg reco terms,\tTarget Avg noreco terms,\tBkg Avg -log(L),\tBkg Avg reco terms,\tBkg Avg noreco terms");
+  printf("\n%.4f\t\t%.5f\t\t\t%.5f\t\t\t%.5f\t\t%.5f\t\t\t%.5f\t\t\t%.5f\n",
+         float(n_match)/float(n_try),
+         h_LL_target->GetMean(), h_TargetRecoTerms->GetMean(), h_TargetNoRecoTerms->GetMean(),
+         h_LL_bkg->GetMean(), h_bkgRecoTerms->GetMean(), h_bkgNoRecoTerms->GetMean());
+
   output_file->WriteTObject(he_EffvsDrift);
   output_file->WriteTObject(he_EffvsDrift_cheat);
   output_file->WriteTObject(he_EffvsDrift_maxpe);
@@ -239,6 +323,7 @@ void fm_Offline(){
   h_SignalNoRecoTerms->Write();
   h_bkgRecoTerms->Write();
   h_bkgNoRecoTerms->Write();
+  mll_tree->Write();
   output_file->Close();
 
   return;
