@@ -236,8 +236,7 @@ inline double log_logistic_dist(double* x, double* par){
   if (x[0] <= 0) return 0.;
   double alpha = par[0];
   double beta = par[1];
-  double z = pow(x[0]/alpha, beta);
-  return (beta / alpha) * z / pow(1 + z, 2);
+  return (beta / alpha) * pow(x[0]/alpha, beta-1) / pow(1 + pow(x[0]/alpha, beta), 2);
 }
 
 struct MLLcconfigs{
