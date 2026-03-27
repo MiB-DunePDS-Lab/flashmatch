@@ -170,10 +170,10 @@ void fm_distributions(){
     solarnu_tree->SetBranchAddress("Time",                     &tpc_time);
     
     int sn_entries = solarnu_tree->GetEntries();
-    for (int sn_entry = 0; sn_entry < sn_entries; sn_entry++) {
-      solarnu_tree->GetEntry(sn_entry);
-    // for (auto& idx_entry : MaxChargeIndxs){
-    //   solarnu_tree->GetEntry(idx_entry);
+    // for (int sn_entry = 0; sn_entry < sn_entries; sn_entry++) {
+      // solarnu_tree->GetEntry(sn_entry);
+    for (auto& idx_entry : MaxChargeIndxs){
+      solarnu_tree->GetEntry(idx_entry);
       if (!MatchedOpFlashCorrectly) continue;
       iev = sn_iev;
 
