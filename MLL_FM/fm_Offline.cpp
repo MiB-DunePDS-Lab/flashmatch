@@ -74,12 +74,14 @@ void fm_Offline(){
   TH2D* h2_exp_reco         = static_cast<TH2D*>(parametrizer_file->Get("h2_exp_reco"));
   TGraphErrors* g_par1      = static_cast<TGraphErrors*>(parametrizer_file->Get("g_par1")); 
   TGraphErrors* g_par2      = static_cast<TGraphErrors*>(parametrizer_file->Get("g_par2"));
+  TEfficiency* he_hit_prob = static_cast<TEfficiency*>(parametrizer_file->Get("he_hit_prob"));
  
   LikelihoodComputer likelihood_computer(
     visibility_file_name, // Visibility file name
     n_opdet,              // Number of optical detectors
     drift_velocity,       // Drift velocity
     LY_times_PDE,         // Light yield times photo detector efficiency
+    he_hit_prob,          // Hit probability function (TEfficiency)
     f_reco_prob,          // Reconstruction probability function
     f_RecoExpDistr,          // Lognormal function for extrapolation
     f_par1_trend,        // Trend function for logm
@@ -178,6 +180,7 @@ void fm_Offline(){
   size_t n_noflash = 0;
   for (auto& idx_entry : MaxChargeIndxs){
     treeReader.SetEntry(idx_entry);
+    if (idx_entry % 100 == 0) std::cout <<idx_entry<<"/"<< MaxChargeIndxs.size()<< "\r" << std::flush;
   // while (treeReader.Next()) {
     if (MAdjFlashPE.GetSize()==0) {
       // std::cout << "No flash PE information available!" << std::endl;

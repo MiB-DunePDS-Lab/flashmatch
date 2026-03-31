@@ -5,6 +5,9 @@
 #include <cmath>
 #include <numeric>
 
+#include "TEfficiency.h"
+#include "TGraphAsymmErrors.h"
+#include <TMVA/TSpline1.h>
 #include "Utils.hpp"
 
 class VertexInfo {
@@ -114,8 +117,7 @@ public:
 
   float E_reco;
   float x_reco;
-  TF1* f_reco_prob;
-
+  
   float GetLikelihoodMatch(const ClusterTPC& tpc_cluster,
                            const ClusterPDS& pds_cluster,
                            std::vector<float>& reco_terms,
@@ -160,7 +162,9 @@ public:
 
       exp_ph = E_reco*LY_times_PDE*voxel_vis;
       if(exp_ph==0) exp_ph = E_reco*LY_times_PDE*1.e-15;
-      float P_hit_mu = f_reco_prob->Eval(exp_ph);
+      float P_hit_mu = g_he->Eval(exp_ph);
+      if (P_hit_mu <= 0.) P_hit_mu = 1.e-4;
+      if (P_hit_mu >= 1.) P_hit_mu = 1. - 1.e-4;
 
       reco_pe = pds_cluster.reco_pes->at(idx_opdet);
 
@@ -170,7 +174,7 @@ public:
           f_RecoExpDistr->SetParameters(f_par1_trend->Eval(exp_ph), f_par2_trend->Eval(exp_ph));
           // term = log(P_hit_mu*f_RecoExpDistr->Eval(reco_pe))*weight_hit;
           // term = log(P_hit_mu*f_RecoExpDistr->Eval(reco_pe)/f_RecoExpDistr->Eval(exp(f_par1_trend->Eval(exp_ph)-pow(f_par2_trend->Eval(exp_ph),2))))*weight_hit;
-          term = log(P_hit_mu*f_RecoExpDistr->Integral(reco_pe-sqrt(reco_pe)*0.5, reco_pe+sqrt(reco_pe)*0.5))*weight_hit;
+          term = log(P_hit_mu*f_RecoExpDistr->Integral(reco_pe-sqrt(reco_pe)*0.5, reco_pe+sqrt(reco_pe)*0.5, 0.001))*weight_hit;
           log_likelihood += term;
           reco_terms.push_back(term);
           // std::cout <<  "t " << term << " " << log_likelihood << std::endl;
@@ -178,7 +182,7 @@ public:
           f_RecoExpDistr->SetParameters(g_par1->Eval(exp_ph), g_par2->Eval(exp_ph));
           // term = log(P_hit_mu*f_RecoExpDistr->Eval(reco_pe))*weight_hit;
           // term = log(P_hit_mu*f_RecoExpDistr->Eval(reco_pe)/f_RecoExpDistr->Eval(exp(g_par1->Eval(exp_ph)-pow(g_par2->Eval(exp_ph),2))))*weight_hit;
-          term = log(P_hit_mu*f_RecoExpDistr->Integral(reco_pe-sqrt(reco_pe)*0.5, reco_pe+sqrt(reco_pe)*0.5))*weight_hit;
+          term = log(P_hit_mu*f_RecoExpDistr->Integral(reco_pe-sqrt(reco_pe)*0.5, reco_pe+sqrt(reco_pe)*0.5, 0.001))*weight_hit;
           log_likelihood += (term);
           reco_terms.push_back(term);
           // std::cout << "d " << term << " " << log_likelihood << std::endl;
@@ -193,6 +197,7 @@ public:
 
     // std::cout << "xxx" << log_likelihood << std::endl;
     x_reco *= x_sign;
+    // std::cout << log_likelihood << std::endl;
     return log_likelihood*weight_sum;
   } // GetLikelihoodMatch
 
@@ -201,7 +206,7 @@ public:
                      size_t n_opdet,
                      float drift_velocity,
                      float LY_times_PDE,
-                     TF1* f_reco_prob,
+                     TEfficiency* he_hit_prob,
                      TF1* f_RecoExpDistr,
                      TF1* f_par1_trend,
                      TF1* f_par2_trend,
@@ -216,7 +221,7 @@ public:
     n_opdet(n_opdet),
     drift_velocity(drift_velocity),
     LY_times_PDE(LY_times_PDE),
-    f_reco_prob(f_reco_prob),
+    he_hit_prob(he_hit_prob),
     f_RecoExpDistr(f_RecoExpDistr),
     f_par1_trend(f_par1_trend),
     f_par2_trend(f_par2_trend),
@@ -237,6 +242,7 @@ private:
   float drift_velocity;
   float LY_times_PDE;
   std::vector<std::vector<float>> opDet_visMapDirect;
+  TEfficiency* he_hit_prob;
   TF1* f_RecoExpDistr;
   TF1* f_par1_trend;
   TF1* f_par2_trend;
@@ -246,6 +252,9 @@ private:
   float calib_c, calib_slope, corr_lambda;
   TH2D* h2_exp_reco = nullptr; // Optional, can be nullptr
 
+  TMVA::TSpline1* g_he = nullptr;
+  
+  
   // set inside the class
   TH1D* hgrid[3] = {nullptr};
   std::vector<int> cryo_to_tpc;
@@ -282,6 +291,8 @@ private:
       std::memcpy(opDet_visMapDirect[VisMapEntry].data(), &opDet_visDirect[0], n_opdet * sizeof(float));
     }
 
+    g_he = new TMVA::TSpline1("spline", (TGraph*)he_hit_prob->CreateGraph());
+    
     return;
   } // 
 

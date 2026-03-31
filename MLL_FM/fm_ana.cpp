@@ -2,8 +2,11 @@
 #include <iostream>
 #include <vector>
 #include "RtypesCore.h"
+#include "TEfficiency.h"
 #include "TFile.h"
+#include "TGraph.h"
 #include "TGraphErrors.h"
+#include "TSpline.h"
 #include "TString.h"
 #include "TTree.h"
 
@@ -60,13 +63,14 @@ void fm_ana(){
   tpc_pds_tree->SetBranchAddress("e_true", &e_true);
 
   TFile* parametrizer_file  = TFile::Open((input_dir+"MLL_Parametrizer.root").c_str(), "READ");
-  TF1* f_reco_prob          = static_cast<TF1*>(parametrizer_file->Get("f_reco_prob"));
   TF1* f_RecoExpDistr       = static_cast<TF1*>(parametrizer_file->Get("f_RecoExpDistr"));
   TF1* f_par1_trend         = static_cast<TF1*>(parametrizer_file->Get("f_par1_trend"));
   TF1* f_par2_trend         = static_cast<TF1*>(parametrizer_file->Get("f_par2_trend"));
   TH2D* h2_exp_reco         = static_cast<TH2D*>(parametrizer_file->Get("h2_exp_reco"));
   TGraphErrors* g_par1      = static_cast<TGraphErrors*>(parametrizer_file->Get("g_par1")); 
   TGraphErrors* g_par2      = static_cast<TGraphErrors*>(parametrizer_file->Get("g_par2"));
+
+  TEfficiency* he_hit_prob = static_cast<TEfficiency*>(parametrizer_file->Get("he_hit_prob"));
 
   // --- HISTOS -----------------------------------------------------------------
   TH1D* h_TrueRecoTerms = new TH1D("h_TrueRecoTerms",Form("%s;%s;%s","h_TrueRecoTerms","Reco Terms for True Match","counts"),
@@ -142,7 +146,7 @@ void fm_ana(){
     n_opdet,              // Number of optical detectors
     drift_velocity,       // Drift velocity
     LY_times_PDE,         // Light yield times photo detector efficiency
-    f_reco_prob,          // Reconstruction probability function
+    he_hit_prob,          // Hit probability function (TEfficiency)
     f_RecoExpDistr,       // PDF for extrapolation
     f_par1_trend,         // Trend function for par1
     f_par2_trend,         // Trend function for par2
@@ -165,6 +169,8 @@ void fm_ana(){
   // for (Long64_t entry = 0; entry < tpc_pds_tree->GetEntries(); entry++) {
   // for (Long64_t entry = 0; entry < 10000; entry++) {
   for (size_t entry : MaxChargeIndxs) {
+    if (entry % 100 == 0) std::cout <<entry<<"/"<< MaxChargeIndxs.size()<< "\r" << std::flush;
+    // if (entry>10000) break;
     tpc_pds_tree->GetEntry(entry);
     x_sign = (x_true <= 0) ? -1. : 1.;
     // time_pds = -18;
@@ -200,7 +206,8 @@ void fm_ana(){
     std::vector<float> true_reco_terms, true_noreco_terms;
     float true_loglikelihood = likelihood_computer.GetLikelihoodMatch(true_tpc_cluster, true_pds_cluster, true_reco_terms, true_noreco_terms, x_sign);
     // std::cout << "vvvv " << -true_loglikelihood << std::endl;
-    LLs_true.push_back(-true_loglikelihood);
+    // push back the true log-likelihood to the vector if not inf or nan
+    if (!std::isinf(true_loglikelihood) && !std::isnan(true_loglikelihood)) LLs_true.push_back(-true_loglikelihood);
     for (auto& term : true_reco_terms) h_TrueRecoTerms->Fill(-term);
     for (auto& term : true_noreco_terms) h_TrueNoRecoTerms->Fill(-term);
     float e_reco = likelihood_computer.E_reco;
@@ -224,9 +231,12 @@ void fm_ana(){
      
       std::vector<float> fake_reco_terms, fake_noreco_terms;
       float fake_loglikelihood = likelihood_computer.GetLikelihoodMatch(fake_tpc_clusters[i], true_pds_cluster, fake_reco_terms, fake_noreco_terms, x_sign);
+      // float fake_loglikelihood = -8;
 
+      // if (!std::isinf(true_loglikelihood) && !std::isnan(true_loglikelihood) && !std::isinf(fake_loglikelihood) && !std::isnan(fake_loglikelihood)) continue; // Skip if both true and fake log-likelihoods are valid numbers (not inf or nan)
       LLs_true_scaled.push_back(-true_loglikelihood);
       LLs_fake.push_back(-fake_loglikelihood);
+      
       for (auto& term : fake_reco_terms) h_FakeRecoTerms->Fill(-term);
       for (auto& term : fake_noreco_terms) h_FakeNoRecoTerms->Fill(-term);
       ntry++;
