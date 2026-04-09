@@ -216,7 +216,6 @@ struct MLLcconfigs{
   std::string visibility_file_name;
   double fit_Qcorr_Etrue_low;
   double fit_Qcorr_Etrue_up;
-  float pe_low;
   float pe_up;
   float light_yield;
   float arapuca_pde;
@@ -250,7 +249,6 @@ inline MLLcconfigs load_ana_config(const std::string &filename){
   config.visibility_file_name = j.at("visibility_file_name").get<std::string>();
   config.fit_Qcorr_Etrue_low  = j.at("fit_Qcorr_Etrue_low").get<double>();
   config.fit_Qcorr_Etrue_up   = j.at("fit_Qcorr_Etrue_up").get<double>();
-  config.pe_low               = j.at("pe_low").get<float>();
   config.pe_up                = j.at("pe_up").get<float>();
   config.light_yield          = j.at("light_yield").get<float>();
   config.arapuca_pde          = j.at("arapuca_pde").get<float>();

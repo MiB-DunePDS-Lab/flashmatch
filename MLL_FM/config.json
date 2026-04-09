@@ -6,7 +6,6 @@
   "q_cut_high":70000.0,
   "fit_Qcorr_Etrue_low": 5,
   "fit_Qcorr_Etrue_up": 30,
-  "pe_low": 0,
   "pe_up": 300,
   "light_yield": 20000,
   "arapuca_pde": 0.03,

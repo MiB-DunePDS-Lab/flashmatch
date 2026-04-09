@@ -19,7 +19,6 @@ void fm_distributions(){
   std::string input_dir            = f.input_dir;
   std::string ana_file_name        = f.ana_file_name;
   std::string visibility_file_name = f.visibility_file_name;
-  // float pe_low                     = f.pe_low;
   float pe_up                      = f.pe_up;
   float light_yield                = f.light_yield;
   float arapuca_pde                = f.arapuca_pde;
