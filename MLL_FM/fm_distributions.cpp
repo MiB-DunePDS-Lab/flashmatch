@@ -6,6 +6,7 @@
 #include "TEntryList.h"
 #include "TTree.h"
 #include <cstddef>
+#include <cstdio>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -119,7 +120,7 @@ void fm_distributions(){
   config_tree->SetBranchAddress("OpFlashAlgoPE", &OpFlashAlgoPE);
   config_tree->GetEntry(0);
   std::vector<double> bin_lower_edges;
-  bin_lower_edges.push_back(0.); bin_lower_edges.push_back(OpFlashAlgoPE);
+  bin_lower_edges.push_back(0.);
   double lower_bound = OpFlashAlgoPE; double upper_bound = pe_up*5.;
   double bin_width = 0.8/1.05;
   while (lower_bound < upper_bound) {
@@ -128,6 +129,7 @@ void fm_distributions(){
     lower_bound += bin_width;
   }
 
+  out_file->cd();
   TH1D* h_exp = new TH1D("h_exp",
                          Form("%s;%s;%s","h_exp","Expected #Pe","Counts"),
                          bin_lower_edges.size()-1, bin_lower_edges.data());
@@ -142,6 +144,7 @@ void fm_distributions(){
                                bin_lower_edges.size()-1, bin_lower_edges.data(),
                                bin_lower_edges.size()-1, bin_lower_edges.data());
 
+  ana_file->cd();
   TTree* solarnu_tree = static_cast<TTree*>(ana_file->Get("solarnuana/SolarNuAnaTree"));
   std::vector<size_t> MaxChargeIndxs = take_max_charge_indices(solarnu_tree, "Event", "Charge");
 
@@ -180,8 +183,11 @@ void fm_distributions(){
   int sn_entries = solarnu_tree->GetEntries();
   // for (int sn_entry = 0; sn_entry < sn_entries; sn_entry++) {
   // solarnu_tree->GetEntry(sn_entry);
+
+  size_t last_index = MaxChargeIndxs[MaxChargeIndxs.size() - 1];
   for (auto& idx_entry : MaxChargeIndxs){
     solarnu_tree->GetEntry(idx_entry);
+    if (idx_entry % 100 == 0) std::cout << idx_entry <<"/"<< last_index << "\r" << std::flush;
     if (!MatchedOpFlashCorrectly) continue;
     iev = sn_iev;
 
