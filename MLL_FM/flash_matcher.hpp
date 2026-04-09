@@ -162,7 +162,9 @@ public:
 
       exp_ph = E_reco*LY_times_PDE*voxel_vis;
       if(exp_ph==0) exp_ph = E_reco*LY_times_PDE*1.e-15;
-      float P_hit_mu = g_he->Eval(exp_ph);
+      float P_hit_mu = (exp_ph<xprob_max) ? g_he->Eval(exp_ph) : 1.; // Avoid weird extrapolation where we
+      //                                                             // have no points in the efficiency graph,
+      //                                                             // and just assume that the hit probability is 1 for very high expected PE.
       if (P_hit_mu <= 0.) P_hit_mu = 1.e-4;
       if (P_hit_mu >= 1.) P_hit_mu = 1. - 1.e-4;
 
@@ -253,6 +255,7 @@ private:
   TH2D* h2_exp_reco = nullptr; // Optional, can be nullptr
 
   TMVA::TSpline1* g_he = nullptr;
+  float xprob_max = 0.;
   
   
   // set inside the class
@@ -291,7 +294,9 @@ private:
       std::memcpy(opDet_visMapDirect[VisMapEntry].data(), &opDet_visDirect[0], n_opdet * sizeof(float));
     }
 
-    g_he = new TMVA::TSpline1("spline", (TGraph*)he_hit_prob->CreateGraph());
+    TGraph* g_he_graph = (TGraph*)he_hit_prob->CreateGraph();
+    xprob_max = g_he_graph->GetX()[g_he_graph->GetN()-1];
+    g_he = new TMVA::TSpline1("spline", g_he_graph);
     
     return;
   } // 

@@ -82,7 +82,6 @@ void fm_Offline(){
     drift_velocity,       // Drift velocity
     LY_times_PDE,         // Light yield times photo detector efficiency
     he_hit_prob,          // Hit probability function (TEfficiency)
-    f_reco_prob,          // Reconstruction probability function
     f_RecoExpDistr,          // Lognormal function for extrapolation
     f_par1_trend,        // Trend function for logm
     f_par2_trend,       // Trend function for sigma

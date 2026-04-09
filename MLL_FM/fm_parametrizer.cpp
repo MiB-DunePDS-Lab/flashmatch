@@ -26,18 +26,6 @@ void fm_parametrizer(){
  
 
   // --- FIT ------------------------------------------------------------------
-  // Fit reco probability -----------------------------------------------------  
-  TF1* f_reco_prob_fit = new TF1("f_hit_prob_fit", sigmoid_sigmoid_erf, 0., 60., 6); // To fit only in a short range
-  f_reco_prob_fit->SetParNames("amp1","x0_1","slope1","amp2","x0_2","slope2");
-  f_reco_prob_fit->SetNpx(3000);
-  f_reco_prob_fit->SetParameters(7, 0.5, 1.0, 7., 0.8, 5.0);
-  f_reco_prob_fit->SetParLimits(2, 0.75, 1.05);     
-  he_hit_prob->Fit(f_reco_prob_fit, "R");
-  
-  TF1* f_reco_prob = new TF1("f_reco_prob", sigmoid_sigmoid_erf, 0., 2000., 6); // Extend the function range
-  f_reco_prob->SetNpx(3000);
-  f_reco_prob->SetParameters(f_reco_prob_fit->GetParameters());
-
   // Create and fit the reco|expected distributions ---------------------------
   TF1* f_RecoExpDistr = nullptr;
   if (distribution == "lognormal") {
@@ -73,7 +61,7 @@ void fm_parametrizer(){
     double h1_proj_integral = h1_proj->Integral();
     
     if(h1_proj_integral > 0.){
-      h1_proj->Scale(1./(h1_proj_integral*h1_proj->GetBinWidth(1)));
+      h1_proj->Scale(1./(h1_proj_integral), "width");
       
       double mean   = h1_proj->GetBinCenter(h1_proj->GetMaximumBin());
       double stddev = h1_proj->GetStdDev();
@@ -99,7 +87,7 @@ void fm_parametrizer(){
 
       TFitResultPtr fit_res = nullptr;
       if (h1_proj->GetEntries() > 400) fit_res = h1_proj->Fit(f_RecoExpDistr, "Q", "", std::max(0.,mean-5*stddev), mean+5*stddev);
-      h1_proj->SetName(Form("h1_proj_%i_pe", (int)h2_exp_reco->GetYaxis()->GetBinCenter(idx_y)));
+      h1_proj->SetName(Form("h1_proj_%ip%i_pe", (int)h2_exp_reco->GetYaxis()->GetBinCenter(idx_y), (int)(h2_exp_reco->GetYaxis()->GetBinCenter(idx_y)*10)%10));
       h1_proj->Write();
 
       for(int idx_x=1; idx_x<=h2_exp_reco->GetNbinsX(); idx_x++){
@@ -133,8 +121,8 @@ void fm_parametrizer(){
     f_par1_trend = new TF1("f_par1_trend", "[0]+[1]*log(x+[2])", 0., 2000);
     f_par1_trend->SetParNames("offset","log_slope","linear_slope");
     f_par1_trend->SetParameters(-0.5,1.2,1.0);  
-    f_par1_trend->SetParLimits(1, 0.0, 5.0);
-    f_par1_trend->SetParLimits(2,-3.0, 10.0);
+    f_par1_trend->SetParLimits(1, 0.2, 2.0);
+    f_par1_trend->SetParLimits(2, 0.0, 10.0);
   
     g_par2->SetTitle("#sigma vs Expected Photons;#Expected Photons;#sigma");
     // f_par2_trend = new TF1("f_par2_trend","([0] + [1]*x + [2]*x*x)/(1 + [3]*x + [4]*x*x)", 0., 2000);
@@ -143,7 +131,7 @@ void fm_parametrizer(){
     // f_par2_trend->SetParLimits(4,0,10);   
     f_par2_trend = new TF1("f_par2_trend", "[0]+[1]*exp([2]*(x-[3]))", 0., 2000);
     f_par2_trend->SetParNames("offset","exp_slope","exp_rate","exp_x0");
-    f_par2_trend->SetParameters(0.5, 1, -1, 1);
+    f_par2_trend->SetParameters(0.3, 0.5, -0.03, -9);
     f_par2_trend->SetParLimits(0, 0.3, 1.);
     // f_par2_trend->SetParLimits(1, 0.0, 5.0);
     // f_par2_trend->SetParLimits(2, -0.01, 0.0);
@@ -157,7 +145,7 @@ void fm_parametrizer(){
   }
   else if (distribution == "log-logistic") {
     g_par1->SetTitle("alpha vs Expected Photons;#Expected Photons;#alpha");
-    f_par1_trend = new TF1("f_par1_trend", "pol1", 0., 2000.);
+    f_par1_trend = new TF1("f_par1_trend", "pol2", 0., 2000.);
   
     g_par2->SetTitle("beta vs Expected Photons;#Expected Photons;#beta");
     f_par2_trend = new TF1("f_par2_trend", "pol1", 0., 2000.);
@@ -181,7 +169,6 @@ void fm_parametrizer(){
   out_file->cd();
   he_hit_prob->Write();
   h2_exp_reco->Write();
-  f_reco_prob->Write();
   f_RecoExpDistr->SetParameters(f_par1_trend->Eval(20.), f_par2_trend->Eval(20.));
   f_RecoExpDistr->Write();
   f_par1_trend->Write();

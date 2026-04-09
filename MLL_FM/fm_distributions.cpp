@@ -105,17 +105,28 @@ void fm_distributions(){
     opdets->push_back(i);
   }
   
+  double lower_bound = pe_low; double upper_bound = pe_up*5.;
+  double bin_width = 0.8/1.05;;
+  std::vector<double> bin_lower_edges;
+  while (pe_low < upper_bound) {
+    bin_lower_edges.push_back(pe_low);
+    bin_width *= 1.05; // Increase the bin width by 5% each time
+    pe_low += bin_width;
+  }
+  
   TH1D* h_exp = new TH1D("h_exp",
                          Form("%s;%s;%s","h_exp","Expected #Pe","Counts"),
-                         300, pe_low, pe_up);
+                         bin_lower_edges.size()-1, bin_lower_edges.data());
   
   TH1D* h_expreco = new TH1D("h_expreco",
                              Form("%s;%s;%s","h_expreco","Expected #Pe", "Counts"),
-                             300, pe_low, pe_up);
+                             bin_lower_edges.size()-1, bin_lower_edges.data());
+
 
   TH2D* h2_exp_reco = new TH2D("h2_exp_reco",
                                Form("%s;%s;%s", "h2_exp_reco", "Reco #Pe", "Expected #Pe"),
-                               300*5, pe_low, pe_up*5, 300*5, pe_low, pe_up*5);
+                               bin_lower_edges.size()-1, bin_lower_edges.data(),
+                               bin_lower_edges.size()-1, bin_lower_edges.data());
 
   // --- EXTRA VARIABLES ------------------------------------------------------
   Float_t vertex_coor[3] = {0.};
