@@ -5,7 +5,6 @@
 #include <cstddef>
 #include <vector>
 #include <iostream>
-#include <filesystem>
 #include <fstream>
 #include <string>
 #include <nlohmann/json.hpp>
@@ -19,7 +18,6 @@
 #include <TMath.h>
 
 using json = nlohmann::json;
-namespace fs = std::filesystem;
 
 
 // --- PURE UTILITIES ---------------------------------------------------------
