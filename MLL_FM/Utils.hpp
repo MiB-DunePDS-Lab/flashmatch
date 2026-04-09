@@ -23,33 +23,6 @@ namespace fs = std::filesystem;
 
 
 // --- PURE UTILITIES ---------------------------------------------------------
-
-inline std::vector<std::string> get_list_of_files_in_folder(std::string folder_name, std::string ends_with){
-  std::vector<std::string> result;
-
-  if (!fs::exists(folder_name) || !fs::is_directory(folder_name))
-    return result;
-
-  for (const auto& entry : fs::directory_iterator(folder_name))
-  {
-    if (!entry.is_regular_file())
-      continue;
-
-    std::string filename = entry.path().filename().string();
-
-    if (filename.size() >= ends_with.size() &&
-      filename.compare(filename.size() - ends_with.size(),
-                       ends_with.size(),
-                       ends_with) == 0)
-    {
-      result.push_back(filename);
-    }
-  }
-
-  return result;
-}
-
-
 template <typename T>
 std::vector<T> treeBranch_to_vector(TTree* tree, const std::string& branch_name) {
   std::vector<T> vec;
@@ -241,8 +214,8 @@ inline double log_logistic_dist(double* x, double* par){
 
 struct MLLcconfigs{
   std::string input_dir;
+  std::string ana_file_name;
   std::string visibility_file_name;
-  int max_nfiles;
   double fit_Qcorr_Etrue_low;
   double fit_Qcorr_Etrue_up;
   float pe_low;
@@ -275,10 +248,10 @@ inline MLLcconfigs load_ana_config(const std::string &filename){
   file >> j;
   MLLcconfigs config;
   config.input_dir            = j.at("input_dir").get<std::string>();
+  config.ana_file_name        = j.at("ana_file_name").get<std::string>();
   config.visibility_file_name = j.at("visibility_file_name").get<std::string>();
   config.fit_Qcorr_Etrue_low  = j.at("fit_Qcorr_Etrue_low").get<double>();
   config.fit_Qcorr_Etrue_up   = j.at("fit_Qcorr_Etrue_up").get<double>();
-  config.max_nfiles           = j.at("max_nfiles").get<int>();
   config.pe_low               = j.at("pe_low").get<float>();
   config.pe_up                = j.at("pe_up").get<float>();
   config.light_yield          = j.at("light_yield").get<float>();

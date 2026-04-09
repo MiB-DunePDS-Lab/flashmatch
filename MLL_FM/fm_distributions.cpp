@@ -17,9 +17,9 @@ void fm_distributions(){
   // --- CONFIGS ---------------------------------------------------------------
   MLLcconfigs f = load_ana_config("./config.json");
   std::string input_dir            = f.input_dir;
+  std::string ana_file_name        = f.ana_file_name;
   std::string visibility_file_name = f.visibility_file_name;
-  int max_nfiles                   = f.max_nfiles;
-  float pe_low                     = f.pe_low;
+  // float pe_low                     = f.pe_low;
   float pe_up                      = f.pe_up;
   float light_yield                = f.light_yield;
   float arapuca_pde                = f.arapuca_pde;
@@ -104,20 +104,35 @@ void fm_distributions(){
   for(size_t i=0; i<n_opdet; i++){
     opdets->push_back(i);
   }
-  
-  double lower_bound = pe_low; double upper_bound = pe_up*5.;
-  double bin_width = 0.8/1.05;;
+
+
+  // --- EXTRA VARIABLES ------------------------------------------------------
+  Float_t vertex_coor[3] = {0.};
+
+  // --- LOOP OVER ANA FILES ---------------------------------------------------
+  // --- ANA STUFF -----------------------------------------------------------
+  ana_file_name = input_dir+ana_file_name;
+  if(!std::filesystem::exists(ana_file_name)) printf("File %s does not exist!\n", ana_file_name.c_str());
+
+  TFile* ana_file = TFile::Open(ana_file_name.c_str(), "READ");
+  TTree* config_tree = static_cast<TTree*>(ana_file->Get("solarnuana/ConfigTree"));
+  float OpFlashAlgoPE = 0.;
+  config_tree->SetBranchAddress("OpFlashAlgoPE", &OpFlashAlgoPE);
+  config_tree->GetEntry(0);
   std::vector<double> bin_lower_edges;
-  while (pe_low < upper_bound) {
-    bin_lower_edges.push_back(pe_low);
+  bin_lower_edges.push_back(0.); bin_lower_edges.push_back(OpFlashAlgoPE);
+  double lower_bound = OpFlashAlgoPE; double upper_bound = pe_up*5.;
+  double bin_width = 0.8/1.05;
+  while (lower_bound < upper_bound) {
+    bin_lower_edges.push_back(lower_bound);
     bin_width *= 1.05; // Increase the bin width by 5% each time
-    pe_low += bin_width;
+    lower_bound += bin_width;
   }
-  
+
   TH1D* h_exp = new TH1D("h_exp",
                          Form("%s;%s;%s","h_exp","Expected #Pe","Counts"),
                          bin_lower_edges.size()-1, bin_lower_edges.data());
-  
+
   TH1D* h_expreco = new TH1D("h_expreco",
                              Form("%s;%s;%s","h_expreco","Expected #Pe", "Counts"),
                              bin_lower_edges.size()-1, bin_lower_edges.data());
@@ -128,124 +143,106 @@ void fm_distributions(){
                                bin_lower_edges.size()-1, bin_lower_edges.data(),
                                bin_lower_edges.size()-1, bin_lower_edges.data());
 
-  // --- EXTRA VARIABLES ------------------------------------------------------
-  Float_t vertex_coor[3] = {0.};
-  
-  // --- LOOP OVER ANA FILES ---------------------------------------------------
-  std::string sample_dir = input_dir+"files/";
-  std::vector<std::string> ana_files = get_list_of_files_in_folder(sample_dir, ".root");
-  int nfile_to_analyze = std::min(int(ana_files.size()), max_nfiles);
-  int nfile_analyzed = 0; int idx_file = 0;
-  while(nfile_analyzed < nfile_to_analyze){
-    // --- ANA STUFF -----------------------------------------------------------
-    std::string ana_file_name = sample_dir+ana_files[idx_file];
-    idx_file++;
-    if(!std::filesystem::exists(ana_file_name)) continue;
-    ifile = idx_file; nfile_analyzed++;
-    if (idx_file % 10 == 0) std::cout <<nfile_analyzed<<"--"<< ana_file_name << "\r" << std::flush;
+  TTree* solarnu_tree = static_cast<TTree*>(ana_file->Get("solarnuana/SolarNuAnaTree"));
+  std::vector<size_t> MaxChargeIndxs = take_max_charge_indices(solarnu_tree, "Event", "Charge");
 
-    TFile* ana_file = TFile::Open(ana_file_name.c_str(), "READ");
-    TTree* solarnu_tree = static_cast<TTree*>(ana_file->Get("solarnuana/SolarNuAnaTree"));
-    std::vector<size_t> MaxChargeIndxs = take_max_charge_indices(solarnu_tree, "Event", "Charge");
+  int sn_iev = 0; int sn_flag = 0;
+  float TrueX = 0.; float TrueY = 0.; float TrueZ = 0.;
+  float TrueE = 0.;
+  float MatchedOpFlashRecoX = 0.;
+  float MatchedOpFlashPurity = 0.;
+  // float MatchedOpFlashRecoY = 0.; float MatchedOpFlashRecoZ = 0.;
+  float MatchedOpFlashTime = 0.;
+  bool MatchedOpFlashCorrectly = false;
+  std::vector<double>* MatchedOpFlashPEperOpDet = nullptr;
+  float Charge = 0.;
+  float tpc_time = 0.;
+  float RecoY = 0.; float RecoZ = 0.;
 
-    int sn_iev = 0; int sn_flag = 0;
-    float TrueX = 0.; float TrueY = 0.; float TrueZ = 0.;
-    float TrueE = 0.;
-    float MatchedOpFlashRecoX = 0.;
-    float MatchedOpFlashPurity = 0.;
-    // float MatchedOpFlashRecoY = 0.; float MatchedOpFlashRecoZ = 0.;
-    float MatchedOpFlashTime = 0.;
-    bool MatchedOpFlashCorrectly = false;
-    std::vector<double>* MatchedOpFlashPEperOpDet = nullptr;
-    float Charge = 0.;
-    float tpc_time = 0.;
-    float RecoY = 0.; float RecoZ = 0.;
-    
-    solarnu_tree->SetBranchAddress("Event", &sn_iev);
-    solarnu_tree->SetBranchAddress("Flag",  &sn_flag);
-    solarnu_tree->SetBranchAddress("RecoY", &RecoY);
-    solarnu_tree->SetBranchAddress("RecoZ", &RecoZ);
+  solarnu_tree->SetBranchAddress("Event", &sn_iev);
+  solarnu_tree->SetBranchAddress("Flag",  &sn_flag);
+  solarnu_tree->SetBranchAddress("RecoY", &RecoY);
+  solarnu_tree->SetBranchAddress("RecoZ", &RecoZ);
 
-    solarnu_tree->SetBranchAddress("SignalParticleE",          &TrueE);
-    solarnu_tree->SetBranchAddress("SignalParticleX",          &TrueX);
-    solarnu_tree->SetBranchAddress("SignalParticleY",          &TrueY);
-    solarnu_tree->SetBranchAddress("SignalParticleZ",          &TrueZ);
-    solarnu_tree->SetBranchAddress("MatchedOpFlashRecoX",      &MatchedOpFlashRecoX);
-    // solarnu_tree->SetBranchAddress("MatchedOpFlashRecoY",      &MatchedOpFlashRecoY);
-    // solarnu_tree->SetBranchAddress("MatchedOpFlashRecoZ",      &MatchedOpFlashRecoZ);
-    solarnu_tree->SetBranchAddress("MatchedOpFlashTime",       &MatchedOpFlashTime);
-    solarnu_tree->SetBranchAddress("MatchedOpFlashPur",       &MatchedOpFlashPurity);
-    solarnu_tree->SetBranchAddress("MatchedOpFlashCorrectly",  &MatchedOpFlashCorrectly);
-    solarnu_tree->SetBranchAddress("MatchedOpFlashPEperOpDet", &MatchedOpFlashPEperOpDet);
-    solarnu_tree->SetBranchAddress("Charge",                   &Charge);
-    solarnu_tree->SetBranchAddress("Time",                     &tpc_time);
-    
-    int sn_entries = solarnu_tree->GetEntries();
-    // for (int sn_entry = 0; sn_entry < sn_entries; sn_entry++) {
-      // solarnu_tree->GetEntry(sn_entry);
-    for (auto& idx_entry : MaxChargeIndxs){
-      solarnu_tree->GetEntry(idx_entry);
-      if (!MatchedOpFlashCorrectly) continue;
-      iev = sn_iev;
+  solarnu_tree->SetBranchAddress("SignalParticleE",          &TrueE);
+  solarnu_tree->SetBranchAddress("SignalParticleX",          &TrueX);
+  solarnu_tree->SetBranchAddress("SignalParticleY",          &TrueY);
+  solarnu_tree->SetBranchAddress("SignalParticleZ",          &TrueZ);
+  solarnu_tree->SetBranchAddress("MatchedOpFlashRecoX",      &MatchedOpFlashRecoX);
+  // solarnu_tree->SetBranchAddress("MatchedOpFlashRecoY",      &MatchedOpFlashRecoY);
+  // solarnu_tree->SetBranchAddress("MatchedOpFlashRecoZ",      &MatchedOpFlashRecoZ);
+  solarnu_tree->SetBranchAddress("MatchedOpFlashTime",       &MatchedOpFlashTime);
+  solarnu_tree->SetBranchAddress("MatchedOpFlashPur",       &MatchedOpFlashPurity);
+  solarnu_tree->SetBranchAddress("MatchedOpFlashCorrectly",  &MatchedOpFlashCorrectly);
+  solarnu_tree->SetBranchAddress("MatchedOpFlashPEperOpDet", &MatchedOpFlashPEperOpDet);
+  solarnu_tree->SetBranchAddress("Charge",                   &Charge);
+  solarnu_tree->SetBranchAddress("Time",                     &tpc_time);
 
-      x_reco = MatchedOpFlashRecoX; y_reco = RecoY; z_reco = RecoZ;
-      x_true = TrueX; y_true = TrueY; z_true = TrueZ; e_true = TrueE;
-      // if (MatchedOpFlashPurity<0.9) continue;
-   
+  int sn_entries = solarnu_tree->GetEntries();
+  // for (int sn_entry = 0; sn_entry < sn_entries; sn_entry++) {
+  // solarnu_tree->GetEntry(sn_entry);
+  for (auto& idx_entry : MaxChargeIndxs){
+    solarnu_tree->GetEntry(idx_entry);
+    if (!MatchedOpFlashCorrectly) continue;
+    iev = sn_iev;
 
-      vertex_coor[0] = TrueX; vertex_coor[1] = TrueY; vertex_coor[2] = TrueZ;
-      if(!isInFiducialVolume(vertex_coor, vol_min, vol_max, x_cut)) continue;
-      int tpc_index = GetTPCIndex(vertex_coor, hgrid, cryo_to_tpc);
-      if (tpc_index < 0 || tpc_index >= int(cryo_to_tpc.size())) {
-        std::cout << "Event " << iev << " is not in the fiducial volume!" << std::endl;
-        std::cout << vertex_coor[0] << " " << vertex_coor[1] << " " << vertex_coor[2] << std::endl;
-        continue; // Skip this entry if TPC index is invalid
+    x_reco = MatchedOpFlashRecoX; y_reco = RecoY; z_reco = RecoZ;
+    x_true = TrueX; y_true = TrueY; z_true = TrueZ; e_true = TrueE;
+    // if (MatchedOpFlashPurity<0.9) continue;
+
+
+    vertex_coor[0] = TrueX; vertex_coor[1] = TrueY; vertex_coor[2] = TrueZ;
+    if(!isInFiducialVolume(vertex_coor, vol_min, vol_max, x_cut)) continue;
+    int tpc_index = GetTPCIndex(vertex_coor, hgrid, cryo_to_tpc);
+    if (tpc_index < 0 || tpc_index >= int(cryo_to_tpc.size())) {
+      std::cout << "Event " << iev << " is not in the fiducial volume!" << std::endl;
+      std::cout << vertex_coor[0] << " " << vertex_coor[1] << " " << vertex_coor[2] << std::endl;
+      continue; // Skip this entry if TPC index is invalid
+    }
+
+    vertex_coor[0] = TrueX; vertex_coor[1] = RecoY; vertex_coor[2] = RecoZ;
+    if(!isInFiducialVolume(vertex_coor, vol_min, vol_max, x_cut)) continue;
+    tpc_index = GetTPCIndex(vertex_coor, hgrid, cryo_to_tpc);
+    if (tpc_index < 0 || tpc_index >= int(cryo_to_tpc.size())) {
+      std::cout << "Event " << iev << " is not in the fiducial volume!" << std::endl;
+      std::cout << vertex_coor[0] << " " << vertex_coor[1] << " " << vertex_coor[2] << std::endl;
+      continue; // Skip this entry if TPC index is invalid
+    }
+
+    charge = Charge;
+    double dt = tpc_time - MatchedOpFlashTime;
+    my_x_reco = dt*drift_velocity;
+    e_reco = give_me_Ereco(calib_c, calib_slope, corr_lambda, dt, charge);
+    time_pds = MatchedOpFlashTime;
+    time_tpc = tpc_time;
+
+
+    for(size_t idx_opdet=0; idx_opdet<n_opdet; idx_opdet++){
+      float voxel_vis = opDet_visMapDirect[tpc_index][idx_opdet];// + opDet_visMapReflct[tpc_index][idx_opdet];
+      float reco_pe = 0.; float exp_ph = 0.;
+      exp_ph = e_reco*LY_times_PDE*voxel_vis; // Expected photons
+      if(exp_ph==0.) exp_ph = e_reco*LY_times_PDE*min_visibility; 
+
+      // If recontructed ----------------------------------------------------
+      if (MatchedOpFlashPEperOpDet->at(idx_opdet)>0.) {
+        reco_pe = MatchedOpFlashPEperOpDet->at(idx_opdet);
+
+        h_exp->Fill(exp_ph);
+        h_expreco->Fill(exp_ph);
+        h2_exp_reco->Fill(reco_pe, exp_ph);
+        // if (exp_ph < 50 && reco_pe > 200) {
+        //   std::cout << TrueX << " " << TrueY << " " << TrueZ <<" "<< TrueE <<" "<< e_reco <<" "<< e_reco/TrueE << std::endl;
+        // }
       }
-
-      vertex_coor[0] = TrueX; vertex_coor[1] = RecoY; vertex_coor[2] = RecoZ;
-      if(!isInFiducialVolume(vertex_coor, vol_min, vol_max, x_cut)) continue;
-      tpc_index = GetTPCIndex(vertex_coor, hgrid, cryo_to_tpc);
-      if (tpc_index < 0 || tpc_index >= int(cryo_to_tpc.size())) {
-        std::cout << "Event " << iev << " is not in the fiducial volume!" << std::endl;
-        std::cout << vertex_coor[0] << " " << vertex_coor[1] << " " << vertex_coor[2] << std::endl;
-        continue; // Skip this entry if TPC index is invalid
-      }
-
-      charge = Charge;
-      double dt = tpc_time - MatchedOpFlashTime;
-      my_x_reco = dt*drift_velocity;
-      e_reco = give_me_Ereco(calib_c, calib_slope, corr_lambda, dt, charge);
-      time_pds = MatchedOpFlashTime;
-      time_tpc = tpc_time;
-
-        
-      for(size_t idx_opdet=0; idx_opdet<n_opdet; idx_opdet++){
-        float voxel_vis = opDet_visMapDirect[tpc_index][idx_opdet];// + opDet_visMapReflct[tpc_index][idx_opdet];
-        float reco_pe = 0.; float exp_ph = 0.;
-        exp_ph = e_reco*LY_times_PDE*voxel_vis; // Expected photons
-        if(exp_ph==0.) exp_ph = e_reco*LY_times_PDE*min_visibility; 
-
-        // If recontructed ----------------------------------------------------
-        if (MatchedOpFlashPEperOpDet->at(idx_opdet)>0.) {
-          reco_pe = MatchedOpFlashPEperOpDet->at(idx_opdet);
-
-          h_exp->Fill(exp_ph);
-          h_expreco->Fill(exp_ph);
-          h2_exp_reco->Fill(reco_pe, exp_ph);
-          // if (exp_ph < 50 && reco_pe > 200) {
-          //   std::cout << TrueX << " " << TrueY << " " << TrueZ <<" "<< TrueE <<" "<< e_reco <<" "<< e_reco/TrueE << std::endl;
-          // }
-        }
-        else {
-          h_exp->Fill(exp_ph);
-        } // if not reconstructed
-        reco_pes->push_back(reco_pe); exp_phs->push_back(exp_ph);
-      } // opdet loop
-      tpc_pds_tree->Fill();
-      reco_pes->clear(); exp_phs->clear();
-    } // SolarNuAna loop
-    ana_file->Close();
-  }
+      else {
+        h_exp->Fill(exp_ph);
+      } // if not reconstructed
+      reco_pes->push_back(reco_pe); exp_phs->push_back(exp_ph);
+    } // opdet loop
+    tpc_pds_tree->Fill();
+    reco_pes->clear(); exp_phs->clear();
+  } // SolarNuAna loop
+  ana_file->Close();
 
   // --- EXTRA OUTPUTS --------------------------------------------------------
   TEfficiency* he_hit_prob = new TEfficiency(*h_expreco,*h_exp);

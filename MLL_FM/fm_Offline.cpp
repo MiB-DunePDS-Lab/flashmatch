@@ -15,8 +15,8 @@
 void fm_Offline(){
   // --- CONFIGS ---------------------------------------------------------------
   MLLcconfigs f = load_ana_config("./config.json");
-  int max_nfiles               = f.max_nfiles;
   std::string input_dir        = f.input_dir;
+  std::string ana_file_name    = f.ana_file_name;
   TString visibility_file_name = f.visibility_file_name;
   double trend_thr             = f.trend_thr;
   float light_yield            = f.light_yield;
@@ -25,7 +25,7 @@ void fm_Offline(){
   float LY_times_PDE           = light_yield * arapuca_pde;
   
   // TFile* ana_file = TFile::Open("../MLL_FM/debugs/files/solar_ana_dune10kt_1x2x6_hist.root", "READ");
-  TFile* ana_file = TFile::Open((input_dir+"files/SolarNuAnaMerged.root").c_str(), "READ");
+  TFile* ana_file = TFile::Open((input_dir+ana_file_name).c_str(), "READ");
   TTree* tree = static_cast<TTree*>(ana_file->Get("solarnuana/SolarNuAnaTree"));
   std::vector<size_t> MaxChargeIndxs = take_max_charge_indices(tree, "Event", "Charge");
   TTreeReader treeReader(tree);

@@ -4,7 +4,6 @@
 #include "TMath.h"
 #include "TTree.h"
 #include "TTreeReader.h"
-#include <algorithm>
 #include <cstddef>
 #include <filesystem>
 #include <tuple>
@@ -19,8 +18,8 @@
 void fm_calibrator(){
   // --- CONFIGS ---------------------------------------------------------------
   MLLcconfigs f = load_ana_config("./config.json");
-  int max_nfiles                 = f.max_nfiles;
   std::string input_dir          = f.input_dir;
+  std::string ana_file_name      = f.ana_file_name;
   double fit_Qcorr_Etrue_low     = f.fit_Qcorr_Etrue_low;
   double fit_Qcorr_Etrue_up      = f.fit_Qcorr_Etrue_up;
   bool apply_cut                 = f.apply_cut;
@@ -31,37 +30,26 @@ void fm_calibrator(){
   std::vector<std::tuple<float, float, float, float>> true_calib_info; // 
   float drift_velocity = 360./2244.44; // HARD CODED: Drift velocity in cm/tick
 
-  // --- LOOP OVER ANA FILES ---------------------------------------------------
-  std::string sample_dir = input_dir+"files/";  //with and without background
-  std::vector<std::string> ana_files = get_list_of_files_in_folder(sample_dir, ".root");
-  int nfile_to_analyze = std::min(int(ana_files.size()), max_nfiles);
-  int nfile_analyzed = 0; int idx_file = 0;
-  while(nfile_analyzed < nfile_to_analyze){
-    // --- ANA STUFF -----------------------------------------------------------
-    std::string ana_file_name = sample_dir+ana_files[idx_file];
-    idx_file++;
-    if(!std::filesystem::exists(ana_file_name)) continue;
-    nfile_analyzed++;
-    /* if (idx_file % 10 == 0) */ std::cout << "--" <<nfile_analyzed<<"--"<< ana_file_name << "\r" << std::flush;
+  ana_file_name = input_dir+ana_file_name;
+  if(!std::filesystem::exists(ana_file_name)) printf("File %s does not exist. Exiting.\n", ana_file_name.c_str());
 
-    TFile* ana_file = TFile::Open(ana_file_name.c_str(), "READ");
-    TTree* tree = static_cast<TTree*>(ana_file->Get("solarnuana/SolarNuAnaTree"));
-    std::vector<size_t> MaxChargeIndxs = take_max_charge_indices(tree, "Event", "Charge");
+  TFile* ana_file = TFile::Open(ana_file_name.c_str(), "READ");
+  TTree* tree = static_cast<TTree*>(ana_file->Get("solarnuana/SolarNuAnaTree"));
+  std::vector<size_t> MaxChargeIndxs = take_max_charge_indices(tree, "Event", "Charge");
 
-    TTreeReader treeReader(tree);
-    TTreeReaderValue<float> E_true(treeReader, "SignalParticleE");
-    TTreeReaderValue<float> x_true(treeReader, "SignalParticleX");
-    TTreeReaderValue<float> Charge(treeReader, "Charge");
-    TTreeReaderValue<bool> MatchedOpFlashCorrectly(treeReader, "MatchedOpFlashCorrectly");
-   
-    for (auto& idx_entry : MaxChargeIndxs){
-      treeReader.SetEntry(idx_entry);
-      if (!(*MatchedOpFlashCorrectly) || *Charge<q_cut_low || *Charge>q_cut_high) continue;
-      float driftTime = abs((*x_true)/drift_velocity);
-      true_calib_info.push_back(std::make_tuple(*Charge, *E_true, driftTime, *Charge/(*E_true)));
-    }
-    ana_file->Close();
+  TTreeReader treeReader(tree);
+  TTreeReaderValue<float> E_true(treeReader, "SignalParticleE");
+  TTreeReaderValue<float> x_true(treeReader, "SignalParticleX");
+  TTreeReaderValue<float> Charge(treeReader, "Charge");
+  TTreeReaderValue<bool> MatchedOpFlashCorrectly(treeReader, "MatchedOpFlashCorrectly");
+
+  for (auto& idx_entry : MaxChargeIndxs){
+    treeReader.SetEntry(idx_entry);
+    if (!(*MatchedOpFlashCorrectly) || *Charge<q_cut_low || *Charge>q_cut_high) continue;
+    float driftTime = abs((*x_true)/drift_velocity);
+    true_calib_info.push_back(std::make_tuple(*Charge, *E_true, driftTime, *Charge/(*E_true)));
   }
+  ana_file->Close();
 
   float min_charge = get_minimum_from_tuples(true_calib_info, 0); float max_charge = get_maximum_from_tuples(true_calib_info, 0);
   float min_etrue  = get_minimum_from_tuples(true_calib_info, 1); float max_etrue  = get_maximum_from_tuples(true_calib_info, 1);
