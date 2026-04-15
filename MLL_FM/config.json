@@ -1,7 +1,8 @@
 {
-  "input_dir":  "../data/testing_cheating_FM/with_bkg/",
+  "input_dir":  "../data/testing_cheating_FM/no_bkg/",
   "ana_file_name": "SolarNuAnaMerged.root",
-  "visibility_file_name": "../dunevis_fdhd_1x2x6_test_float.root",
+  "visibility_dir": "../visibility/processed/",
+  "geom_identifier": "dune10kt",
   "q_cut_low": 150.0,
   "q_cut_high":70000.0,
   "fit_Qcorr_Etrue_low": 5,
@@ -9,7 +10,6 @@
   "pe_up": 300,
   "light_yield": 20000,
   "arapuca_pde": 0.03,
-  "n_opdet": 480,
   "min_visibility": 1e-15,
   "yz_fiducial_cut": 20,
   "x_fiducial_cut": 20,

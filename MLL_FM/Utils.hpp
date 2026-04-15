@@ -213,13 +213,13 @@ inline double log_logistic_dist(double* x, double* par){
 struct MLLcconfigs{
   std::string input_dir;
   std::string ana_file_name;
-  std::string visibility_file_name;
+  std::string visibility_dir;
+  std::string geom_identifier;
   double fit_Qcorr_Etrue_low;
   double fit_Qcorr_Etrue_up;
   float pe_up;
   float light_yield;
   float arapuca_pde;
-  size_t n_opdet;
   float min_visibility;
   float yz_fiducial_cut;
   float x_fiducial_cut;
@@ -246,13 +246,13 @@ inline MLLcconfigs load_ana_config(const std::string &filename){
   MLLcconfigs config;
   config.input_dir            = j.at("input_dir").get<std::string>();
   config.ana_file_name        = j.at("ana_file_name").get<std::string>();
-  config.visibility_file_name = j.at("visibility_file_name").get<std::string>();
+  config.visibility_dir       = j.at("visibility_dir").get<std::string>();
+  config.geom_identifier      = j.at("geom_identifier").get<std::string>();
   config.fit_Qcorr_Etrue_low  = j.at("fit_Qcorr_Etrue_low").get<double>();
   config.fit_Qcorr_Etrue_up   = j.at("fit_Qcorr_Etrue_up").get<double>();
   config.pe_up                = j.at("pe_up").get<float>();
   config.light_yield          = j.at("light_yield").get<float>();
   config.arapuca_pde          = j.at("arapuca_pde").get<float>();
-  config.n_opdet              = j.at("n_opdet").get<size_t>();
   config.min_visibility       = j.at("min_visibility").get<float>();
   config.yz_fiducial_cut      = j.at("yz_fiducial_cut").get<float>();
   config.x_fiducial_cut       = j.at("x_fiducial_cut").get<float>();

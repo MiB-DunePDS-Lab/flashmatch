@@ -12,15 +12,16 @@ void fm_parametrizer(){
   gROOT->SetBatch(kTRUE);
   // --- CONFIGS ---------------------------------------------------------------
   MLLcconfigs f = load_ana_config("./config.json");
-  std::string input_dir    = f.input_dir;
-  std::string distribution = f.distribution;
-  double fit_trend_low     = f.fit_trend_low;
-  double fit_trend_up      = f.fit_trend_up;
-  bool rebin_h2            = f.rebin_h2;
-  int rebinning            = f.rebinning;
+  std::string input_dir         = f.input_dir;
+  std::string geom_identifier   = f.geom_identifier;
+  std::string distribution      = f.distribution;
+  double fit_trend_low          = f.fit_trend_low;
+  double fit_trend_up           = f.fit_trend_up;
+  bool rebin_h2                 = f.rebin_h2;
+  int rebinning                 = f.rebinning;
   
   // --- INPUTS ---------------------------------------------------------------
-  TFile* distribution_file = TFile::Open((input_dir+"MLL_Distributions.root").c_str(), "READ");
+  TFile* distribution_file = TFile::Open((input_dir+"MLL_Distributions_"+geom_identifier+".root").c_str(), "READ");
   TH2D* h2_exp_reco        = static_cast<TH2D*>(distribution_file->Get("h2_exp_reco"));
   TEfficiency* he_hit_prob = static_cast<TEfficiency*>(distribution_file->Get("he_hit_prob"));
  
@@ -50,7 +51,7 @@ void fm_parametrizer(){
   std::vector<double> par1s, par2s, exp_phs;
   std::vector<double> err_par1, err_par2, err_exp_phs;
   
-  TFile* out_file = TFile::Open((input_dir+"MLL_Parametrizer.root").c_str(), "RECREATE");
+  TFile* out_file = TFile::Open((input_dir+"MLL_Parametrizer_"+geom_identifier+".root").c_str(), "RECREATE");
   out_file->mkdir("projections");
   out_file->cd("projections");
   

@@ -142,9 +142,7 @@ public:
     float log_likelihood = 0.;
     // std::cout << "yyy" << log_likelihood << std::endl;
     float term = 0.;
-    float n_hit = 0.;
-    // find how many entries in reco_pes are > 0.
-    n_hit = std::count_if(pds_cluster.reco_pes->begin(), pds_cluster.reco_pes->end(), [](float pe){ return pe > 0; });
+    float n_hit = std::count_if(pds_cluster.reco_pes->begin(), pds_cluster.reco_pes->end(), [](float pe){ return pe > 0; });
 
     if (n_opdet != pds_cluster.reco_pes->size()){
       std::cerr << "Error: Number of OPDet does not match the size of reco_pes vector!" << std::endl;

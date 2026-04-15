@@ -19,21 +19,23 @@ void fm_distributions(){
   MLLcconfigs f = load_ana_config("./config.json");
   std::string input_dir            = f.input_dir;
   std::string ana_file_name        = f.ana_file_name;
-  std::string visibility_file_name = f.visibility_file_name;
+  std::string visibility_dir       = f.visibility_dir;
+  std::string geom_identifier      = f.geom_identifier;
   float pe_up                      = f.pe_up;
   float light_yield                = f.light_yield;
   float arapuca_pde                = f.arapuca_pde;
-  const size_t n_opdet             = f.n_opdet;
   float min_visibility             = f.min_visibility;
   float fiducial_cut               = f.yz_fiducial_cut;
   float x_cut                      = f.x_fiducial_cut;
   float LY_times_PDE               = light_yield * arapuca_pde; // Light yield times the arapuca pde
+  TString visibility_file_name     = TString(visibility_dir+"dunevis_"+geom_identifier+".root");
 
+  const size_t n_opdet = (geom_identifier == "dune10kt") ? 480 : 184;
 
   // --- INPUTS ---------------------------------------------------------------
   // Calibration fit + correction lambda and drift velocity
   // The latest could be retrieved from fhicls, actually
-  TFile* calib_file = TFile::Open((input_dir+"MLL_Calibrator.root").c_str(), "READ");
+  TFile* calib_file = TFile::Open((input_dir+"MLL_Calibrator_"+geom_identifier+".root").c_str(), "READ");
   TTree* calib_tree = static_cast<TTree*>(calib_file->Get("calib_tree"));
   Float_t calib_c = 0.;         Float_t calib_slope = 0.;
   Float_t drift_velocity = 0.0; Float_t corr_lambda = 0.0;
@@ -45,7 +47,7 @@ void fm_distributions(){
   calib_file->Close();
   
   // --- VISIBILITY STUFF -----------------------------------------------------
-  TFile* visibility_file = TFile::Open(visibility_file_name.c_str(), "READ");
+  TFile* visibility_file = TFile::Open(visibility_file_name, "READ");
   TH1D* hgrid[3] = {nullptr};
   hgrid[0] = (TH1D*)visibility_file->Get("photovisAr/hgrid0");
   hgrid[1] = (TH1D*)visibility_file->Get("photovisAr/hgrid1");
@@ -75,7 +77,7 @@ void fm_distributions(){
 
 
   // --- PREPARE OUTPUT -------------------------------------------------------
-  TFile* out_file = TFile::Open((input_dir+"MLL_Distributions.root").c_str(), "RECREATE");
+  TFile* out_file = TFile::Open((input_dir+"MLL_Distributions_"+geom_identifier+".root").c_str(), "RECREATE");
   TTree* tpc_pds_tree = new TTree("tpc_pds_tree", "tpc_pds_tree");
   Int_t ifile, iev;
   float charge, time_tpc, time_pds, my_x_reco, x_reco, y_reco, z_reco, e_reco;

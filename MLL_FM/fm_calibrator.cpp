@@ -20,6 +20,7 @@ void fm_calibrator(){
   MLLcconfigs f = load_ana_config("./config.json");
   std::string input_dir          = f.input_dir;
   std::string ana_file_name      = f.ana_file_name;
+  std::string geom_identifier    = f.geom_identifier;
   double fit_Qcorr_Etrue_low     = f.fit_Qcorr_Etrue_low;
   double fit_Qcorr_Etrue_up      = f.fit_Qcorr_Etrue_up;
   bool apply_cut                 = f.apply_cut;
@@ -36,6 +37,8 @@ void fm_calibrator(){
   TFile* ana_file = TFile::Open(ana_file_name.c_str(), "READ");
   TTree* tree = static_cast<TTree*>(ana_file->Get("solarnuana/SolarNuAnaTree"));
   std::vector<size_t> MaxChargeIndxs = take_max_charge_indices(tree, "Event", "Charge");
+  printf("Total entries in tree: %lld\n", tree->GetEntries());
+  printf("Entries passing max charge selection: %lu\n", MaxChargeIndxs.size());
 
   TTreeReader treeReader(tree);
   TTreeReaderValue<float> E_true(treeReader, "SignalParticleE");
@@ -49,6 +52,7 @@ void fm_calibrator(){
     float driftTime = abs((*x_true)/drift_velocity);
     true_calib_info.push_back(std::make_tuple(*Charge, *E_true, driftTime, *Charge/(*E_true)));
   }
+  printf("Entries passing cuts: %lu\n", true_calib_info.size());
   ana_file->Close();
 
   float min_charge = get_minimum_from_tuples(true_calib_info, 0); float max_charge = get_maximum_from_tuples(true_calib_info, 0);
@@ -99,7 +103,7 @@ void fm_calibrator(){
   calib_c = f_Calib->GetParameter(0); calib_slope = f_Calib->GetParameter(1);
   calib_tree->Fill();
 
-  TFile* calibrator_file = TFile::Open((input_dir+"MLL_Calibrator.root").c_str(), "RECREATE");
+  TFile* calibrator_file = TFile::Open((input_dir+"MLL_Calibrator_"+geom_identifier+".root").c_str(), "RECREATE");
   calibrator_file->cd();
   calib_tree->Write();
   h2_QperE_driftTime->Write();

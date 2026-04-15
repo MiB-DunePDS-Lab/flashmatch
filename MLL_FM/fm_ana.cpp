@@ -21,15 +21,17 @@ void fm_ana(){
   std::string input_dir        = f.input_dir;
   float light_yield            = f.light_yield;
   float arapuca_pde            = f.arapuca_pde;
-  size_t n_opdet               = f.n_opdet;
-  TString visibility_file_name = f.visibility_file_name;
+  std::string visibility_dir   = f.visibility_dir;
+  std::string geom_identifier  = f.geom_identifier;
   double trend_thr             = f.trend_thr;
   double q_cut_low             = f.q_cut_low;
   float LY_times_PDE           = light_yield * arapuca_pde;
+
+  size_t n_opdet = (geom_identifier == "dune10kt") ? 480 : 184;
   
 
   // --- INPUTS ---------------------------------------------------------------
-  TFile* calib_file = TFile::Open((input_dir+"MLL_Calibrator.root").c_str(), "READ");
+  TFile* calib_file = TFile::Open((input_dir+"MLL_Calibrator_"+geom_identifier+".root").c_str(), "READ");
   TTree* calib_tree = static_cast<TTree*>(calib_file->Get("calib_tree"));
   Float_t calib_c = 0.;         Float_t calib_slope = 0.;
   Float_t drift_velocity = 0.0; Float_t corr_lambda = 0.0;
@@ -39,7 +41,7 @@ void fm_ana(){
   calib_tree->SetBranchAddress("corr_lambda", &corr_lambda);
   calib_tree->GetEntry(0);
 
-  TFile* distribution_file = TFile::Open((input_dir+"MLL_Distributions.root").c_str(), "READ");
+  TFile* distribution_file = TFile::Open((input_dir+"MLL_Distributions_"+geom_identifier+".root").c_str(), "READ");
   TTree* tpc_pds_tree = static_cast<TTree*>(distribution_file->Get("tpc_pds_tree"));
   std::vector<size_t> MaxChargeIndxs = take_max_charge_indices(tpc_pds_tree, "iev", "charge");
   int ifile, iev;
@@ -62,7 +64,7 @@ void fm_ana(){
   tpc_pds_tree->SetBranchAddress("z_true", &z_true);
   tpc_pds_tree->SetBranchAddress("e_true", &e_true);
 
-  TFile* parametrizer_file  = TFile::Open((input_dir+"MLL_Parametrizer.root").c_str(), "READ");
+  TFile* parametrizer_file  = TFile::Open((input_dir+"MLL_Parametrizer_"+geom_identifier+".root").c_str(), "READ");
   TF1* f_RecoExpDistr       = static_cast<TF1*>(parametrizer_file->Get("f_RecoExpDistr"));
   TF1* f_par1_trend         = static_cast<TF1*>(parametrizer_file->Get("f_par1_trend"));
   TF1* f_par2_trend         = static_cast<TF1*>(parametrizer_file->Get("f_par2_trend"));
@@ -141,6 +143,7 @@ void fm_ana(){
                                  200, -650, 650, 200, -650, 650);
 
   // --- LikelihoodComputer -----------------------------------------------------
+  TString visibility_file_name = TString(visibility_dir+"dunevis_"+geom_identifier+".root");
   LikelihoodComputer likelihood_computer(
     visibility_file_name, // Visibility file name
     n_opdet,              // Number of optical detectors
@@ -295,7 +298,7 @@ void fm_ana(){
   
 
   // --- WRITE OUTPUT ----------------------------------------------------------
-  TFile* out_file = TFile::Open((input_dir+"MLL_AnaOutput.root").c_str(), "RECREATE");
+  TFile* out_file = TFile::Open((input_dir+"MLL_AnaOutput_"+geom_identifier+".root").c_str(), "RECREATE");
   out_file->cd();
   h_LL->Write();
   h_LL_scale->Write();
