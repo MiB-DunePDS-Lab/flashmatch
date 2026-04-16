@@ -16,20 +16,23 @@
 
 void fm_distributions(){
   // --- CONFIGS ---------------------------------------------------------------
-  MLLcconfigs f = load_ana_config("./config.json");
-  std::string input_dir            = f.input_dir;
-  std::string ana_file_name        = f.ana_file_name;
-  std::string visibility_dir       = f.visibility_dir;
-  std::string geom_identifier      = f.geom_identifier;
-  float pe_up                      = f.pe_up;
-  float light_yield                = f.light_yield;
-  float arapuca_pde                = f.arapuca_pde;
-  float min_visibility             = f.min_visibility;
-  float fiducial_cut               = f.yz_fiducial_cut;
-  float x_cut                      = f.x_fiducial_cut;
+  MLLcconfigs mll_conf = load_ana_config("./configs/ana_config.json");
+  std::string ana_file_name        = mll_conf.ana_file_name;
+  std::string visibility_dir       = mll_conf.visibility_dir;
+  std::string sample_config_file   = mll_conf.sample_config_file;
+  float pe_up                      = mll_conf.pe_up;
+  float light_yield                = mll_conf.light_yield;
+  float arapuca_pde                = mll_conf.arapuca_pde;
+  float min_visibility             = mll_conf.min_visibility;
+  float fiducial_cut               = mll_conf.yz_fiducial_cut;
+  float x_cut                      = mll_conf.x_fiducial_cut;
   float LY_times_PDE               = light_yield * arapuca_pde; // Light yield times the arapuca pde
-  TString visibility_file_name     = TString(visibility_dir+"dunevis_"+geom_identifier+".root");
 
+  SampleConfigs sample_conf = load_sample_config("./configs/"+sample_config_file);
+  std::string input_dir            = sample_conf.input_dir;
+  std::string geom_identifier      = sample_conf.geom_identifier;
+
+  TString visibility_file_name     = TString(visibility_dir+"dunevis_"+geom_identifier+".root");
   const size_t n_opdet = (geom_identifier == "dune10kt") ? 480 : 184;
 
   // --- INPUTS ---------------------------------------------------------------
@@ -121,6 +124,7 @@ void fm_distributions(){
   float OpFlashAlgoPE = 0.;
   config_tree->SetBranchAddress("OpFlashAlgoPE", &OpFlashAlgoPE);
   config_tree->GetEntry(0);
+  if (OpFlashAlgoPE <= 0.) OpFlashAlgoPE = 1.5;
   std::vector<double> bin_lower_edges;
   bin_lower_edges.push_back(0.);
   double lower_bound = OpFlashAlgoPE; double upper_bound = pe_up*5.;
