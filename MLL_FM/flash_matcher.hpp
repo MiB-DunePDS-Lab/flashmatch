@@ -117,6 +117,8 @@ public:
 
   float E_reco;
   float x_reco;
+  TMVA::TSpline1* g_he = nullptr;
+  float xprob_max = 0.;
   
   float GetLikelihoodMatch(const ClusterTPC& tpc_cluster,
                            const ClusterPDS& pds_cluster,
@@ -252,8 +254,6 @@ private:
   float calib_c, calib_slope, corr_lambda;
   TH2D* h2_exp_reco = nullptr; // Optional, can be nullptr
 
-  TMVA::TSpline1* g_he = nullptr;
-  float xprob_max = 0.;
   
   
   // set inside the class

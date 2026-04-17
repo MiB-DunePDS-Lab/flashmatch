@@ -13,16 +13,27 @@
 #include <vector>
 
 void fm_Offline(){
+  float vv = 6.;
+  if (vv>5.){
+    printf("REMEMBER TO ECLUDE THE PRESELECTION");
+    return;
+  }
   // --- CONFIGS ---------------------------------------------------------------
-  MLLcconfigs f = load_ana_config("./config.json");
-  std::string input_dir        = f.input_dir;
-  std::string ana_file_name    = f.ana_file_name;
-  TString visibility_file_name = f.visibility_file_name;
-  double trend_thr             = f.trend_thr;
-  float light_yield            = f.light_yield;
-  float arapuca_pde            = f.arapuca_pde;
-  const size_t n_opdet         = f.n_opdet;
-  float LY_times_PDE           = light_yield * arapuca_pde;
+  MLLcconfigs mll_conf = load_ana_config("./configs/ana_config.json");
+  std::string sample_config_file = mll_conf.sample_config_file;
+  std::string ana_file_name      = mll_conf.ana_file_name;
+  TString visibility_dir         = mll_conf.visibility_dir;
+  float light_yield              = mll_conf.light_yield;
+  float arapuca_pde              = mll_conf.arapuca_pde;
+  float LY_times_PDE             = light_yield * arapuca_pde;
+  
+  SampleConfigs sample_conf = load_sample_config("./configs/"+sample_config_file);
+  std::string input_dir        = sample_conf.input_dir;
+  std::string geom_identifier  = sample_conf.geom_identifier;
+  double trend_thr             = sample_conf.trend_thr;
+
+  TString visibility_file_name = TString(visibility_dir+"dunevis_"+geom_identifier+".root");
+  size_t n_opdet = (geom_identifier == "dune10kt") ? 480 : 184;
   
   // TFile* ana_file = TFile::Open("../MLL_FM/debugs/files/solar_ana_dune10kt_1x2x6_hist.root", "READ");
   TFile* ana_file = TFile::Open((input_dir+ana_file_name).c_str(), "READ");
@@ -56,7 +67,7 @@ void fm_Offline(){
 
   
   // --- LikelihoodComputer -----------------------------------------------------
-  TFile* calib_file = TFile::Open((input_dir+"MLL_Calibrator.root").c_str(), "READ");
+  TFile* calib_file = TFile::Open((input_dir+"MLL_Calibrator_"+geom_identifier+".root").c_str(), "READ");
   TTree* calib_tree = static_cast<TTree*>(calib_file->Get("calib_tree"));
   Float_t calib_c = 0.;         Float_t calib_slope = 0.;
   Float_t drift_velocity = 0.0; Float_t corr_lambda = 0.0;
@@ -66,7 +77,7 @@ void fm_Offline(){
   calib_tree->SetBranchAddress("corr_lambda", &corr_lambda);
   calib_tree->GetEntry(0);
   
-  TFile* parametrizer_file  = TFile::Open((input_dir+"MLL_Parametrizer.root").c_str(), "READ");
+  TFile* parametrizer_file  = TFile::Open((input_dir+"MLL_Parametrizer_"+geom_identifier+".root").c_str(), "READ");
   TF1* f_reco_prob          = static_cast<TF1*>(parametrizer_file->Get("f_reco_prob"));
   TF1* f_RecoExpDistr       = static_cast<TF1*>(parametrizer_file->Get("f_RecoExpDistr"));
   TF1* f_par1_trend         = static_cast<TF1*>(parametrizer_file->Get("f_par1_trend"));
@@ -95,7 +106,7 @@ void fm_Offline(){
   );
 
   // --- OUTPUT PLOTS ---------------------------------------------------------
-  TFile* output_file = TFile::Open((input_dir+"/MLL_Offline.root").c_str(), "RECREATE");
+  TFile* output_file = TFile::Open((input_dir+"/MLL_Offline_"+geom_identifier+".root").c_str(), "RECREATE");
   Long64_t nn = tree->Draw("SignalParticleX", "", "goff");
   float max_drift = TMath::MaxElement(tree->GetSelectedRows(), tree->GetV1());
   TEfficiency* he_EffvsDrift       = new TEfficiency("he_EffvsDrift",       "Efficiency vs Drift; Drift [cm]; Efficiency", 20, 0., double(max_drift));

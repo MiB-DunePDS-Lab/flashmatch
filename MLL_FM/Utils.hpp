@@ -210,11 +210,10 @@ inline double log_logistic_dist(double* x, double* par){
   return (beta / alpha) * pow(x[0]/alpha, beta-1) / pow(1 + pow(x[0]/alpha, beta), 2);
 }
 
-struct MLLcconfigs{
-  std::string input_dir;
+struct MLLConfigs{
   std::string ana_file_name;
   std::string visibility_dir;
-  std::string geom_identifier;
+  std::string sample_config_file;
   double fit_Qcorr_Etrue_low;
   double fit_Qcorr_Etrue_up;
   float pe_up;
@@ -224,18 +223,11 @@ struct MLLcconfigs{
   float yz_fiducial_cut;
   float x_fiducial_cut;
   // bool verbose;
-  std::string distribution;
-  double fit_trend_low;
-  double fit_trend_up;
-  bool rebin_h2; // Rebin h2_exp_reco_norm
-  int rebinning; // Rebinning factor for h2_exp_reco_norm
-  double trend_thr;
-  bool apply_cut;                 
   float q_cut_low;                
   float q_cut_high;  
 };
 
-inline MLLcconfigs load_ana_config(const std::string &filename){
+inline MLLConfigs load_ana_config(const std::string &filename){
   std::ifstream file(filename);
   if (!file) {
     throw std::runtime_error("Could not open config file: " + filename);
@@ -243,11 +235,10 @@ inline MLLcconfigs load_ana_config(const std::string &filename){
 
   json j;
   file >> j;
-  MLLcconfigs config;
-  config.input_dir            = j.at("input_dir").get<std::string>();
+  MLLConfigs config;
   config.ana_file_name        = j.at("ana_file_name").get<std::string>();
   config.visibility_dir       = j.at("visibility_dir").get<std::string>();
-  config.geom_identifier      = j.at("geom_identifier").get<std::string>();
+  config.sample_config_file   = j.at("sample_config_file").get<std::string>();
   config.fit_Qcorr_Etrue_low  = j.at("fit_Qcorr_Etrue_low").get<double>();
   config.fit_Qcorr_Etrue_up   = j.at("fit_Qcorr_Etrue_up").get<double>();
   config.pe_up                = j.at("pe_up").get<float>();
@@ -257,15 +248,39 @@ inline MLLcconfigs load_ana_config(const std::string &filename){
   config.yz_fiducial_cut      = j.at("yz_fiducial_cut").get<float>();
   config.x_fiducial_cut       = j.at("x_fiducial_cut").get<float>();
   // config.verbose              = j.at("verbose").get<bool>();
-  config.distribution         = j.at("distribution").get<std::string>();
-  config.fit_trend_low        = j.at("fit_trend_low").get<double>();
-  config.fit_trend_up         = j.at("fit_trend_up").get<double>();
-  config.rebin_h2             = j.at("rebin_h2").get<bool>();
-  config.rebinning            = j.at("rebinning").get<int>();
-  config.trend_thr            = j.at("trend_thr").get<double>();
-  config.apply_cut            = j.at("apply_cut").get<bool>();
   config.q_cut_low            = j.at("q_cut_low").get<float>();
   config.q_cut_high           = j.at("q_cut_high").get<float>();
+  return config;
+}
+
+struct SampleConfigs{
+  std::string input_dir;
+  std::string geom_identifier;
+  std::string distribution;
+  double fit_trend_low;
+  double fit_trend_up;
+  double trend_thr;
+  double q_cut_low;
+  bool apply_cut;                 
+};
+
+inline SampleConfigs load_sample_config(const std::string &filename){
+  std::ifstream file(filename);
+  if (!file) {
+    throw std::runtime_error("Could not open config file: " + filename);
+  }
+
+  json j;
+  file >> j;
+  SampleConfigs config;
+  config.input_dir         = j.at("input_dir").get<std::string>();
+  config.geom_identifier   = j.at("geom_identifier").get<std::string>();
+  config.distribution      = j.at("distribution").get<std::string>();
+  config.fit_trend_low     = j.at("fit_trend_low").get<double>();
+  config.fit_trend_up      = j.at("fit_trend_up").get<double>();
+  config.trend_thr         = j.at("trend_thr").get<double>();
+  config.q_cut_low         = j.at("q_cut_low").get<double>();
+  config.apply_cut         = j.at("apply_cut").get<bool>();
   return config;
 }
 

@@ -17,15 +17,19 @@
 // -----------------------------------------------------------------------------
 void fm_calibrator(){
   // --- CONFIGS ---------------------------------------------------------------
-  MLLcconfigs f = load_ana_config("./config.json");
-  std::string input_dir          = f.input_dir;
-  std::string ana_file_name      = f.ana_file_name;
-  std::string geom_identifier    = f.geom_identifier;
-  double fit_Qcorr_Etrue_low     = f.fit_Qcorr_Etrue_low;
-  double fit_Qcorr_Etrue_up      = f.fit_Qcorr_Etrue_up;
-  bool apply_cut                 = f.apply_cut;
-  float q_cut_low                = f.q_cut_low;
-  float q_cut_high               = f.q_cut_high;
+  MLLConfigs mll_conf = load_ana_config("./configs/ana_config.json");
+  std::string ana_file_name      = mll_conf.ana_file_name;
+  std::string sample_config_file = mll_conf.sample_config_file;
+  double fit_Qcorr_Etrue_low     = mll_conf.fit_Qcorr_Etrue_low;
+  double fit_Qcorr_Etrue_up      = mll_conf.fit_Qcorr_Etrue_up;
+  float q_cut_low                = mll_conf.q_cut_low;
+  float q_cut_high               = mll_conf.q_cut_high;
+
+  SampleConfigs sample_conf = load_sample_config("./configs/"+sample_config_file);
+  std::string input_dir          = sample_conf.input_dir;
+  std::string geom_identifier    = sample_conf.geom_identifier;
+  bool apply_cut                 = sample_conf.apply_cut;
+
   
   // --- EXTRA VARIABLES -------------------------------------------------------
   std::vector<std::tuple<float, float, float, float>> true_calib_info; // 

@@ -17,14 +17,17 @@ const size_t n_combinations = 10;
 
 void fm_ana(){
   // --- CONFIGS ---------------------------------------------------------------
-  MLLcconfigs f = load_ana_config("./config.json");
-  std::string input_dir        = f.input_dir;
-  float light_yield            = f.light_yield;
-  float arapuca_pde            = f.arapuca_pde;
-  std::string visibility_dir   = f.visibility_dir;
-  std::string geom_identifier  = f.geom_identifier;
-  double trend_thr             = f.trend_thr;
-  double q_cut_low             = f.q_cut_low;
+  MLLConfigs mll_conf = load_ana_config("./configs/mll_config.json");
+  std::string sample_config_file = mll_conf.sample_config_file;
+  float light_yield            = mll_conf.light_yield;
+  float arapuca_pde            = mll_conf.arapuca_pde;
+  std::string visibility_dir   = mll_conf.visibility_dir;
+  
+  SampleConfigs sample_conf = load_sample_config("./configs/"+sample_config_file);
+  std::string input_dir        = sample_conf.input_dir;
+  std::string geom_identifier  = sample_conf.geom_identifier;
+  double trend_thr             = sample_conf.trend_thr;
+  double q_cut_low             = sample_conf.q_cut_low;
   float LY_times_PDE           = light_yield * arapuca_pde;
 
   size_t n_opdet = (geom_identifier == "dune10kt") ? 480 : 184;

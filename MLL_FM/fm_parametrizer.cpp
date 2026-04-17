@@ -11,14 +11,15 @@
 void fm_parametrizer(){
   gROOT->SetBatch(kTRUE);
   // --- CONFIGS ---------------------------------------------------------------
-  MLLcconfigs f = load_ana_config("./config.json");
-  std::string input_dir         = f.input_dir;
-  std::string geom_identifier   = f.geom_identifier;
-  std::string distribution      = f.distribution;
-  double fit_trend_low          = f.fit_trend_low;
-  double fit_trend_up           = f.fit_trend_up;
-  bool rebin_h2                 = f.rebin_h2;
-  int rebinning                 = f.rebinning;
+  MLLcconfigs mll_conf = load_ana_config("./configs/ana_config.json");
+  std::string sample_config_file = mll_conf.sample_config_file;
+  
+  SampleConfigs sample_conf = load_sample_config("./configs/"+sample_config_file);
+  std::string input_dir       = sample_conf.input_dir;
+  std::string geom_identifier = sample_conf.geom_identifier;
+  std::string distribution    = sample_conf.distribution;
+  double fit_trend_low        = sample_conf.fit_trend_low;
+  double fit_trend_up         = sample_conf.fit_trend_up;
   
   // --- INPUTS ---------------------------------------------------------------
   TFile* distribution_file = TFile::Open((input_dir+"MLL_Distributions_"+geom_identifier+".root").c_str(), "READ");
@@ -55,7 +56,6 @@ void fm_parametrizer(){
   out_file->mkdir("projections");
   out_file->cd("projections");
   
-  if (rebin_h2) h2_exp_reco->Rebin2D(rebinning, rebinning);
   for(int idx_y=1; idx_y<=h2_exp_reco->GetNbinsY(); idx_y++){
     std::cout << idx_y << "/" << h2_exp_reco->GetNbinsY() << "\r" << std::flush;
     TH1D* h1_proj = h2_exp_reco->ProjectionX("h1_proj", idx_y, idx_y, "e");
