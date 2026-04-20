@@ -12,7 +12,6 @@
 #include "TTreeReaderValue.h"
 #include "Utils.hpp"
 
-
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 void fm_calibrator(){
@@ -20,20 +19,32 @@ void fm_calibrator(){
   MLLConfigs mll_conf = load_ana_config("./configs/ana_config.json");
   std::string ana_file_name      = mll_conf.ana_file_name;
   std::string sample_config_file = mll_conf.sample_config_file;
+  std::string visibility_dir     = mll_conf.visibility_dir;
   double fit_Qcorr_Etrue_low     = mll_conf.fit_Qcorr_Etrue_low;
   double fit_Qcorr_Etrue_up      = mll_conf.fit_Qcorr_Etrue_up;
-  float q_cut_low                = mll_conf.q_cut_low;
   float q_cut_high               = mll_conf.q_cut_high;
 
   SampleConfigs sample_conf = load_sample_config("./configs/"+sample_config_file);
   std::string input_dir          = sample_conf.input_dir;
   std::string geom_identifier    = sample_conf.geom_identifier;
-  bool apply_cut                 = sample_conf.apply_cut;
+  float q_cut_low                = sample_conf.q_cut_low;
 
+  TString visibility_file_name     = TString(visibility_dir+"dunevis_"+geom_identifier+".root");
   
   // --- EXTRA VARIABLES -------------------------------------------------------
   std::vector<std::tuple<float, float, float, float>> true_calib_info; // 
   float drift_velocity = 360./2244.44; // HARD CODED: Drift velocity in cm/tick
+
+  TFile* visibility_file = TFile::Open(visibility_file_name, "READ");
+  TTree* tDimensions = (TTree*)visibility_file->Get("photovisAr/tDimensions");
+  Double_t coor_dim[3] = {0.};
+  tDimensions->SetBranchAddress("dimension", coor_dim);
+  tDimensions->GetEntry(0);
+  float tpc_min[3] = {float(coor_dim[0]), float(coor_dim[1]), float(coor_dim[2])}; // x,y,z
+  tDimensions->GetEntry(1);
+  float tpc_max[3] = {float(coor_dim[0]), float(coor_dim[1]), float(coor_dim[2])}; // x,y,z
+  float anode_x = (geom_identifier == "dune10kt") ? tpc_max[0]+tpc_min[0] : tpc_max[0];
+  
 
   ana_file_name = input_dir+ana_file_name;
   if(!std::filesystem::exists(ana_file_name)) printf("File %s does not exist. Exiting.\n", ana_file_name.c_str());
@@ -53,7 +64,7 @@ void fm_calibrator(){
   for (auto& idx_entry : MaxChargeIndxs){
     treeReader.SetEntry(idx_entry);
     if (!(*MatchedOpFlashCorrectly) || *Charge<q_cut_low || *Charge>q_cut_high) continue;
-    float driftTime = abs((*x_true)/drift_velocity);
+    float driftTime = abs((*x_true-anode_x)/drift_velocity);
     true_calib_info.push_back(std::make_tuple(*Charge, *E_true, driftTime, *Charge/(*E_true)));
   }
   printf("Entries passing cuts: %lu\n", true_calib_info.size());
@@ -71,7 +82,7 @@ void fm_calibrator(){
      
   for (const auto& [charge, etrue, drifttime, QperE] : true_calib_info){
     h2_QperE_driftTime->Fill(drifttime, QperE);
-    }
+  }
   //std::cout << "min_QperE"<< min_QperE << std::endl;
   TGraphErrors* g_QperE_driftTime = th2d_to_tgraph_mpv(h2_QperE_driftTime, "g_QperE_driftTime");
   g_QperE_driftTime->SetTitle("QperE vs Drift Time;Drift Time [ticks];QperE [Charge/MeV]");

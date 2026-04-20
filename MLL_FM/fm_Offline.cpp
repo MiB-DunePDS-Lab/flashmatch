@@ -13,16 +13,17 @@
 #include <vector>
 
 void fm_Offline(){
-  float vv = 6.;
-  if (vv>5.){
-    printf("REMEMBER TO ECLUDE THE PRESELECTION");
-    return;
-  }
+  // float vv = 6.;
+  // if (vv>5.){
+  //   printf("REMEMBER TO ECLUDE THE PRESELECTION");
+  //   printf("AND PLANE");
+  //   return;
+  // }
   // --- CONFIGS ---------------------------------------------------------------
-  MLLcconfigs mll_conf = load_ana_config("./configs/ana_config.json");
+  MLLConfigs mll_conf = load_ana_config("./configs/ana_config.json");
   std::string sample_config_file = mll_conf.sample_config_file;
   std::string ana_file_name      = mll_conf.ana_file_name;
-  TString visibility_dir         = mll_conf.visibility_dir;
+  std::string visibility_dir         = mll_conf.visibility_dir;
   float light_yield              = mll_conf.light_yield;
   float arapuca_pde              = mll_conf.arapuca_pde;
   float LY_times_PDE             = light_yield * arapuca_pde;
@@ -33,7 +34,8 @@ void fm_Offline(){
   double trend_thr             = sample_conf.trend_thr;
 
   TString visibility_file_name = TString(visibility_dir+"dunevis_"+geom_identifier+".root");
-  size_t n_opdet = (geom_identifier == "dune10kt") ? 480 : 184;
+  size_t n_opdet = (geom_identifier == "dune10kt") ? 480 : 184; // HARD CODED
+  float  anode_x = (geom_identifier == "dune10kt") ? 0. : 325.04; // HARD CODED
   
   // TFile* ana_file = TFile::Open("../MLL_FM/debugs/files/solar_ana_dune10kt_1x2x6_hist.root", "READ");
   TFile* ana_file = TFile::Open((input_dir+ana_file_name).c_str(), "READ");
@@ -90,6 +92,7 @@ void fm_Offline(){
   LikelihoodComputer likelihood_computer(
     visibility_file_name, // Visibility file name
     n_opdet,              // Number of optical detectors
+    anode_x,
     drift_velocity,       // Drift velocity
     LY_times_PDE,         // Light yield times photo detector efficiency
     he_hit_prob,          // Hit probability function (TEfficiency)

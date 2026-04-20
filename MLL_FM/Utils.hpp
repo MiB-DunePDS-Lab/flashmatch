@@ -150,11 +150,11 @@ std::vector<int> GetCryoToTPCMap(TH1D* hgrid[3], T tpc_min[3], T tpc_max[3]){
 }
 
 template <typename T>
-bool isInFiducialVolume(T vertex_coor[3], T vol_min[3], T vol_max[3], T x_cut){
+bool isInFiducialVolume(T vertex_coor[3], T vol_min[3], T vol_max[3], T x_cut, T anode_x){
   return (vertex_coor[0] > vol_min[0] && vertex_coor[0] < vol_max[0] &&
           vertex_coor[1] > vol_min[1] && vertex_coor[1] < vol_max[1] &&
           vertex_coor[2] > vol_min[2] && vertex_coor[2] < vol_max[2] &&
-          abs(vertex_coor[0]) > x_cut);
+          abs(vertex_coor[0]-anode_x) > x_cut);
 }
 
 template <typename T>
@@ -223,7 +223,6 @@ struct MLLConfigs{
   float yz_fiducial_cut;
   float x_fiducial_cut;
   // bool verbose;
-  float q_cut_low;                
   float q_cut_high;  
 };
 
@@ -248,7 +247,6 @@ inline MLLConfigs load_ana_config(const std::string &filename){
   config.yz_fiducial_cut      = j.at("yz_fiducial_cut").get<float>();
   config.x_fiducial_cut       = j.at("x_fiducial_cut").get<float>();
   // config.verbose              = j.at("verbose").get<bool>();
-  config.q_cut_low            = j.at("q_cut_low").get<float>();
   config.q_cut_high           = j.at("q_cut_high").get<float>();
   return config;
 }

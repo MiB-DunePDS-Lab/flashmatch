@@ -17,7 +17,7 @@ const size_t n_combinations = 10;
 
 void fm_ana(){
   // --- CONFIGS ---------------------------------------------------------------
-  MLLConfigs mll_conf = load_ana_config("./configs/mll_config.json");
+  MLLConfigs mll_conf = load_ana_config("./configs/ana_config.json");
   std::string sample_config_file = mll_conf.sample_config_file;
   float light_yield            = mll_conf.light_yield;
   float arapuca_pde            = mll_conf.arapuca_pde;
@@ -45,6 +45,11 @@ void fm_ana(){
   calib_tree->GetEntry(0);
 
   TFile* distribution_file = TFile::Open((input_dir+"MLL_Distributions_"+geom_identifier+".root").c_str(), "READ");
+  float anode_x = 0.;
+  TTree* anode_tree = static_cast<TTree*>(distribution_file->Get("anode_tree"));
+  anode_tree->SetBranchAddress("anode_x", &anode_x);
+  anode_tree->GetEntry(0);
+
   TTree* tpc_pds_tree = static_cast<TTree*>(distribution_file->Get("tpc_pds_tree"));
   std::vector<size_t> MaxChargeIndxs = take_max_charge_indices(tpc_pds_tree, "iev", "charge");
   int ifile, iev;
@@ -150,6 +155,7 @@ void fm_ana(){
   LikelihoodComputer likelihood_computer(
     visibility_file_name, // Visibility file name
     n_opdet,              // Number of optical detectors
+    anode_x,
     drift_velocity,       // Drift velocity
     LY_times_PDE,         // Light yield times photo detector efficiency
     he_hit_prob,          // Hit probability function (TEfficiency)

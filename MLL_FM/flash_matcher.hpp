@@ -132,7 +132,7 @@ public:
     float delta_time = tpc_cluster.time_tpc - pds_cluster.time_pds ;
     E_reco = give_me_Ereco(calib_c, calib_slope, corr_lambda, delta_time, tpc_cluster.charge);
     float reco_pe, exp_ph;
-    x_reco = delta_time*drift_velocity;
+    x_reco = delta_time*drift_velocity+anode_x;
     float vertex_coor[3] = {x_reco, tpc_cluster.y_reco, tpc_cluster.z_reco};
     vertex_coor[0] = std::max(vertex_coor[0], tpc_min[0]+15); vertex_coor[0] = std::min(vertex_coor[0], tpc_max[0]-15);
     vertex_coor[1] = std::max(vertex_coor[1], tpc_min[1]+15); vertex_coor[1] = std::min(vertex_coor[1], tpc_max[1]-15);
@@ -206,6 +206,7 @@ public:
   // LikelihoodComputer constructor
   LikelihoodComputer(TString visibility_file_name,
                      size_t n_opdet,
+                     float anode_x,
                      float drift_velocity,
                      float LY_times_PDE,
                      TEfficiency* he_hit_prob,
@@ -221,6 +222,7 @@ public:
                      TH2D* h2_exp_reco = nullptr)
     : visibility_file_name(visibility_file_name),
     n_opdet(n_opdet),
+    anode_x(anode_x),
     drift_velocity(drift_velocity),
     LY_times_PDE(LY_times_PDE),
     he_hit_prob(he_hit_prob),
@@ -241,6 +243,7 @@ private:
   // take in input
   TString visibility_file_name;
   size_t n_opdet;
+  float anode_x;
   float drift_velocity;
   float LY_times_PDE;
   std::vector<std::vector<float>> opDet_visMapDirect;

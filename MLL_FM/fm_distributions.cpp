@@ -16,7 +16,7 @@
 
 void fm_distributions(){
   // --- CONFIGS ---------------------------------------------------------------
-  MLLcconfigs mll_conf = load_ana_config("./configs/ana_config.json");
+  MLLConfigs mll_conf = load_ana_config("./configs/ana_config.json");
   std::string ana_file_name        = mll_conf.ana_file_name;
   std::string visibility_dir       = mll_conf.visibility_dir;
   std::string sample_config_file   = mll_conf.sample_config_file;
@@ -65,6 +65,7 @@ void fm_distributions(){
   float tpc_max[3] = {float(coor_dim[0]), float(coor_dim[1]), float(coor_dim[2])}; // x,y,z
   float vol_min[3] = {tpc_min[0]+x_cut, tpc_min[1]+fiducial_cut, tpc_min[2]+fiducial_cut};
   float vol_max[3] = {tpc_max[0]-x_cut, tpc_max[1]-fiducial_cut, tpc_max[2]-fiducial_cut};
+  float anode_x = (geom_identifier == "dune10kt") ? tpc_max[0]+tpc_min[0] : tpc_max[0];
   std::vector<int> cryo_to_tpc = GetCryoToTPCMap(hgrid, tpc_min, tpc_max); // Get the mapping from cryostat voxel to TPC voxel
   
   TTree* photoVisMap = (TTree*)visibility_file->Get("photovisAr/photoVisMap");
@@ -81,6 +82,10 @@ void fm_distributions(){
 
   // --- PREPARE OUTPUT -------------------------------------------------------
   TFile* out_file = TFile::Open((input_dir+"MLL_Distributions_"+geom_identifier+".root").c_str(), "RECREATE");
+  TTree* anode_tree = new TTree("anode_tree", "anode_tree");
+  anode_tree->Branch("anode_x", &anode_x);
+  anode_tree->Fill();
+
   TTree* tpc_pds_tree = new TTree("tpc_pds_tree", "tpc_pds_tree");
   Int_t ifile, iev;
   float charge, time_tpc, time_pds, my_x_reco, x_reco, y_reco, z_reco, e_reco;
@@ -127,12 +132,18 @@ void fm_distributions(){
   if (OpFlashAlgoPE <= 0.) OpFlashAlgoPE = 1.5;
   std::vector<double> bin_lower_edges;
   bin_lower_edges.push_back(0.);
-  double lower_bound = OpFlashAlgoPE; double upper_bound = pe_up*5.;
+  double lower_bound = 0.1; double upper_bound = pe_up*5.;
   double bin_width = 0.8/1.05;
   while (lower_bound < upper_bound) {
-    bin_lower_edges.push_back(lower_bound);
-    bin_width *= 1.05; // Increase the bin width by 5% each time
-    lower_bound += bin_width;
+    if (lower_bound <= OpFlashAlgoPE) {
+      bin_lower_edges.push_back(lower_bound);
+      lower_bound += 0.1; // Finer bins below the OpFlashAlgoPE threshold
+    }
+    else {
+      lower_bound += bin_width;
+      bin_lower_edges.push_back(lower_bound);
+      bin_width *= 1.05; // Increase the bin width by 5% each time
+    }
   }
 
   out_file->cd();
@@ -180,7 +191,7 @@ void fm_distributions(){
   // solarnu_tree->SetBranchAddress("MatchedOpFlashRecoY",      &MatchedOpFlashRecoY);
   // solarnu_tree->SetBranchAddress("MatchedOpFlashRecoZ",      &MatchedOpFlashRecoZ);
   solarnu_tree->SetBranchAddress("MatchedOpFlashTime",       &MatchedOpFlashTime);
-  solarnu_tree->SetBranchAddress("MatchedOpFlashPur",       &MatchedOpFlashPurity);
+  solarnu_tree->SetBranchAddress("MatchedOpFlashPur",        &MatchedOpFlashPurity);
   solarnu_tree->SetBranchAddress("MatchedOpFlashCorrectly",  &MatchedOpFlashCorrectly);
   solarnu_tree->SetBranchAddress("MatchedOpFlashPEperOpDet", &MatchedOpFlashPEperOpDet);
   solarnu_tree->SetBranchAddress("Charge",                   &Charge);
@@ -203,7 +214,7 @@ void fm_distributions(){
 
 
     vertex_coor[0] = TrueX; vertex_coor[1] = TrueY; vertex_coor[2] = TrueZ;
-    if(!isInFiducialVolume(vertex_coor, vol_min, vol_max, x_cut)) continue;
+    if(!isInFiducialVolume(vertex_coor, vol_min, vol_max, x_cut, anode_x)) continue;
     int tpc_index = GetTPCIndex(vertex_coor, hgrid, cryo_to_tpc);
     if (tpc_index < 0 || tpc_index >= int(cryo_to_tpc.size())) {
       std::cout << "Event " << iev << " is not in the fiducial volume!" << std::endl;
@@ -212,7 +223,7 @@ void fm_distributions(){
     }
 
     vertex_coor[0] = TrueX; vertex_coor[1] = RecoY; vertex_coor[2] = RecoZ;
-    if(!isInFiducialVolume(vertex_coor, vol_min, vol_max, x_cut)) continue;
+    if(!isInFiducialVolume(vertex_coor, vol_min, vol_max, x_cut, anode_x)) continue;
     tpc_index = GetTPCIndex(vertex_coor, hgrid, cryo_to_tpc);
     if (tpc_index < 0 || tpc_index >= int(cryo_to_tpc.size())) {
       std::cout << "Event " << iev << " is not in the fiducial volume!" << std::endl;
@@ -262,6 +273,7 @@ void fm_distributions(){
 
   // --- WRITE OUTPUT ---------------------------------------------------------
   out_file->cd();
+  anode_tree->Write();
   tpc_pds_tree->Write();
   h_exp->Write();
   h_expreco->Write();

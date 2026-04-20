@@ -11,7 +11,7 @@
 void fm_parametrizer(){
   gROOT->SetBatch(kTRUE);
   // --- CONFIGS ---------------------------------------------------------------
-  MLLcconfigs mll_conf = load_ana_config("./configs/ana_config.json");
+  MLLConfigs mll_conf = load_ana_config("./configs/ana_config.json");
   std::string sample_config_file = mll_conf.sample_config_file;
   
   SampleConfigs sample_conf = load_sample_config("./configs/"+sample_config_file);
@@ -57,6 +57,7 @@ void fm_parametrizer(){
   out_file->cd("projections");
   
   for(int idx_y=1; idx_y<=h2_exp_reco->GetNbinsY(); idx_y++){
+      double exp_ph = h2_exp_reco->GetYaxis()->GetBinCenter(idx_y);
     std::cout << idx_y << "/" << h2_exp_reco->GetNbinsY() << "\r" << std::flush;
     TH1D* h1_proj = h2_exp_reco->ProjectionX("h1_proj", idx_y, idx_y, "e");
     double h1_proj_integral = h1_proj->Integral();
@@ -68,8 +69,10 @@ void fm_parametrizer(){
       double stddev = h1_proj->GetStdDev();
 
       if (distribution == "lognormal") {
-        f_RecoExpDistr->SetParameters(log(mean), 0.25);
-        f_RecoExpDistr->SetParLimits(0, log(mean-5*stddev), log(mean+5*stddev));
+        std::cout << exp_ph << " " << log(mean) << std::endl;
+        f_RecoExpDistr->SetParameters(log(mean), 0.45);
+        f_RecoExpDistr->SetParLimits(0, log(mean-1*stddev), log(mean+1*stddev));
+        f_RecoExpDistr->SetParLimits(1, 0.01, 1.2);
       }
       else if (distribution == "weibull") {
         f_RecoExpDistr->SetParameters(1.5, mean/1.2);
@@ -96,7 +99,6 @@ void fm_parametrizer(){
       } 
 
       
-      double exp_ph = h2_exp_reco->GetYaxis()->GetBinCenter(idx_y);
       // if (reco > 400) break; // Stop if reco is greater than 40
       if (exp_ph > 0 && h1_proj->GetEntries() > 400 && fit_res==0){
         exp_phs.push_back(exp_ph);                       err_exp_phs.push_back(0);
@@ -132,8 +134,8 @@ void fm_parametrizer(){
     // f_par2_trend->SetParLimits(4,0,10);   
     f_par2_trend = new TF1("f_par2_trend", "[0]+[1]*exp([2]*(x-[3]))", 0., 2000);
     f_par2_trend->SetParNames("offset","exp_slope","exp_rate","exp_x0");
-    f_par2_trend->SetParameters(0.3, 0.5, -0.03, -9);
-    f_par2_trend->SetParLimits(0, 0.3, 1.);
+    f_par2_trend->SetParameters(g_par2->Eval(fit_trend_up), 0.5, -0.03, -9);
+    f_par2_trend->SetParLimits(0, g_par2->Eval(fit_trend_up)*0.7, g_par2->Eval(fit_trend_up)*1.5);
     // f_par2_trend->SetParLimits(1, 0.0, 5.0);
     // f_par2_trend->SetParLimits(2, -0.01, 0.0);
   }
