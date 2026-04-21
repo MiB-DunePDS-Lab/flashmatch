@@ -33,9 +33,9 @@ void fm_Offline(){
   std::string geom_identifier  = sample_conf.geom_identifier;
   double trend_thr             = sample_conf.trend_thr;
 
+  DuneGeom geom = load_dune_geom("./configs/"+geom_identifier+".json");
+  
   TString visibility_file_name = TString(visibility_dir+"dunevis_"+geom_identifier+".root");
-  size_t n_opdet = (geom_identifier == "dune10kt") ? 480 : 184; // HARD CODED
-  float  anode_x = (geom_identifier == "dune10kt") ? 0. : 325.04; // HARD CODED
   
   // TFile* ana_file = TFile::Open("../MLL_FM/debugs/files/solar_ana_dune10kt_1x2x6_hist.root", "READ");
   TFile* ana_file = TFile::Open((input_dir+ana_file_name).c_str(), "READ");
@@ -91,8 +91,7 @@ void fm_Offline(){
  
   LikelihoodComputer likelihood_computer(
     visibility_file_name, // Visibility file name
-    n_opdet,              // Number of optical detectors
-    anode_x,
+    geom,                 // DUNE geometry
     drift_velocity,       // Drift velocity
     LY_times_PDE,         // Light yield times photo detector efficiency
     he_hit_prob,          // Hit probability function (TEfficiency)
@@ -184,7 +183,7 @@ void fm_Offline(){
 
  
   // --- LOOP OVER ENTRIES ----------------------------------------------------
-  std::vector<float> reco_pes(n_opdet, 0.);
+  std::vector<float> reco_pes(geom.n_opdet, 0.);
   std::vector<float> reco_terms;
   std::vector<float> noreco_terms;
   size_t n_try = 0;
@@ -213,7 +212,7 @@ void fm_Offline(){
     ClusterTPC tpc_cluster = ClusterTPC(*Charge, *Time, *RecoY, *RecoZ);
 
     for (size_t idx_flash=0; idx_flash<MAdjFlashResidual.GetSize(); idx_flash++){
-      for(size_t j=0; j<n_opdet; j++) reco_pes[j] = MAdjFlashPEperOpDet.At(idx_flash*n_opdet + j);
+      for(size_t j=0; j<geom.n_opdet; j++) reco_pes[j] = MAdjFlashPEperOpDet.At(idx_flash*geom.n_opdet + j);
 
       float flash_fast = MAdjFlashFast.At(idx_flash);
       float flash_time = MAdjFlashTime.At(idx_flash);
@@ -311,14 +310,14 @@ void fm_Offline(){
   std::cout << "N tries : " << n_try << std::endl;
   std::printf("No flash: %zu (%.3f%%)\n", n_noflash, float(n_noflash)/float(n_try)*100);
   std::printf("Target matches: %.0f (%.3f%%) of reco_terms and %.0f (%.3f%%) of non-reco\n",
-              h_TargetRecoTerms->GetEntries(), h_TargetRecoTerms->GetEntries()/(n_opdet*h_LL_target->GetEntries())*100,
-              h_TargetNoRecoTerms->GetEntries(), h_TargetNoRecoTerms->GetEntries()/(n_opdet*h_LL_target->GetEntries())*100);
+              h_TargetRecoTerms->GetEntries(), h_TargetRecoTerms->GetEntries()/(geom.n_opdet*h_LL_target->GetEntries())*100,
+              h_TargetNoRecoTerms->GetEntries(), h_TargetNoRecoTerms->GetEntries()/(geom.n_opdet*h_LL_target->GetEntries())*100);
   std::printf("True matches : %.0f (%.3f%%) of reco_terms and %.0f (%.3f%%) of non-reco\n",
-              h_SignalRecoTerms->GetEntries(), h_SignalRecoTerms->GetEntries()/(n_opdet*h_LL->GetEntries())*100,
-              h_SignalNoRecoTerms->GetEntries(), h_SignalNoRecoTerms->GetEntries()/(n_opdet*h_LL->GetEntries())*100);
+              h_SignalRecoTerms->GetEntries(), h_SignalRecoTerms->GetEntries()/(geom.n_opdet*h_LL->GetEntries())*100,
+              h_SignalNoRecoTerms->GetEntries(), h_SignalNoRecoTerms->GetEntries()/(geom.n_opdet*h_LL->GetEntries())*100);
   std::printf("False matches %.0f (%.3f%%) of reco_terms and %.0f (%.3f%%) of non-reco\n",
-              h_bkgRecoTerms->GetEntries(), h_bkgRecoTerms->GetEntries()/(n_opdet*h_LL_bkg->GetEntries())*100,
-              h_bkgNoRecoTerms->GetEntries(), h_bkgNoRecoTerms->GetEntries()/(n_opdet*h_LL_bkg->GetEntries())*100);
+              h_bkgRecoTerms->GetEntries(), h_bkgRecoTerms->GetEntries()/(geom.n_opdet*h_LL_bkg->GetEntries())*100,
+              h_bkgNoRecoTerms->GetEntries(), h_bkgNoRecoTerms->GetEntries()/(geom.n_opdet*h_LL_bkg->GetEntries())*100);
 
   printf("Total eff,\tTarget Avg -log(L),\tTarget Avg reco terms,\tTarget Avg noreco terms,\tBkg Avg -log(L),\tBkg Avg reco terms,\tBkg Avg noreco terms");
   printf("\n%.4f\t\t%.5f\t\t\t%.5f\t\t\t%.5f\t\t%.5f\t\t\t%.5f\t\t\t%.5f\n",

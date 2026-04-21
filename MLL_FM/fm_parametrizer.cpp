@@ -69,7 +69,6 @@ void fm_parametrizer(){
       double stddev = h1_proj->GetStdDev();
 
       if (distribution == "lognormal") {
-        std::cout << exp_ph << " " << log(mean) << std::endl;
         f_RecoExpDistr->SetParameters(log(mean), 0.45);
         f_RecoExpDistr->SetParLimits(0, log(mean-1*stddev), log(mean+1*stddev));
         f_RecoExpDistr->SetParLimits(1, 0.01, 1.2);

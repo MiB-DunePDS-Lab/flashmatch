@@ -38,7 +38,10 @@ void fm_calibrator(){
   float drift_velocity = 360./2244.44; // HARD CODED: Drift velocity in cm/tick
 
   ana_file_name = input_dir+ana_file_name;
-  if(!std::filesystem::exists(ana_file_name)) printf("File %s does not exist. Exiting.\n", ana_file_name.c_str());
+  if(!std::filesystem::exists(ana_file_name)) {
+    printf("File %s does not exist. Exiting.\n", ana_file_name.c_str());
+    return;
+  }
 
   TFile* ana_file = TFile::Open(ana_file_name.c_str(), "READ");
   TTree* tree = static_cast<TTree*>(ana_file->Get("solarnuana/SolarNuAnaTree"));

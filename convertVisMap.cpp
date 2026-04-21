@@ -91,6 +91,7 @@ void convertVisMap(){
   out_tree->Write();
   out_file->Close();
   visibility_file_ar->Close();
+  if (visibility_file_xe) visibility_file_xe->Close();
 
   return;
 }
