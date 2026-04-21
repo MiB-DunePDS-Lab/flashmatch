@@ -5,6 +5,9 @@
 #include <cmath>
 #include <numeric>
 
+#include "TEfficiency.h"
+#include "TGraphAsymmErrors.h"
+#include <TMVA/TSpline1.h>
 #include "Utils.hpp"
 
 class VertexInfo {
@@ -114,12 +117,14 @@ public:
 
   float E_reco;
   float x_reco;
-  TF1* f_reco_prob;
-
+  TMVA::TSpline1* g_he = nullptr;
+  float xprob_max = 0.;
+  
   float GetLikelihoodMatch(const ClusterTPC& tpc_cluster,
                            const ClusterPDS& pds_cluster,
                            std::vector<float>& reco_terms,
-                           std::vector<float>& noreco_terms){
+                           std::vector<float>& noreco_terms,
+                           float x_sign = 1.) {
 
     if (reco_terms.size() >= 0) reco_terms.clear();
     if (noreco_terms.size() >= 0) noreco_terms.clear();
@@ -127,7 +132,7 @@ public:
     float delta_time = tpc_cluster.time_tpc - pds_cluster.time_pds ;
     E_reco = give_me_Ereco(calib_c, calib_slope, corr_lambda, delta_time, tpc_cluster.charge);
     float reco_pe, exp_ph;
-    x_reco = delta_time*drift_velocity;
+    x_reco = delta_time*drift_velocity+geom.anode_x;
     float vertex_coor[3] = {x_reco, tpc_cluster.y_reco, tpc_cluster.z_reco};
     vertex_coor[0] = std::max(vertex_coor[0], tpc_min[0]+15); vertex_coor[0] = std::min(vertex_coor[0], tpc_max[0]-15);
     vertex_coor[1] = std::max(vertex_coor[1], tpc_min[1]+15); vertex_coor[1] = std::min(vertex_coor[1], tpc_max[1]-15);
@@ -139,11 +144,9 @@ public:
     float log_likelihood = 0.;
     // std::cout << "yyy" << log_likelihood << std::endl;
     float term = 0.;
-    float n_hit = 0.;
-    // find how many entries in reco_pes are > 0.
-    n_hit = std::count_if(pds_cluster.reco_pes->begin(), pds_cluster.reco_pes->end(), [](float pe){ return pe > 0; });
+    float n_hit = std::count_if(pds_cluster.reco_pes->begin(), pds_cluster.reco_pes->end(), [](float pe){ return pe > 0; });
 
-    if (n_opdet != pds_cluster.reco_pes->size()){
+    if (geom.n_opdet != pds_cluster.reco_pes->size()){
       std::cerr << "Error: Number of OPDet does not match the size of reco_pes vector!" << std::endl;
       exit(1);
     }
@@ -159,7 +162,11 @@ public:
 
       exp_ph = E_reco*LY_times_PDE*voxel_vis;
       if(exp_ph==0) exp_ph = E_reco*LY_times_PDE*1.e-15;
-      float P_hit_mu = f_reco_prob->Eval(exp_ph);
+      float P_hit_mu = (exp_ph<xprob_max) ? g_he->Eval(exp_ph) : 1.; // Avoid weird extrapolation where we
+      //                                                             // have no points in the efficiency graph,
+      //                                                             // and just assume that the hit probability is 1 for very high expected PE.
+      if (P_hit_mu <= 0.) P_hit_mu = 1.e-4;
+      if (P_hit_mu >= 1.) P_hit_mu = 1. - 1.e-4;
 
       reco_pe = pds_cluster.reco_pes->at(idx_opdet);
 
@@ -169,15 +176,16 @@ public:
           f_RecoExpDistr->SetParameters(f_par1_trend->Eval(exp_ph), f_par2_trend->Eval(exp_ph));
           term = log(P_hit_mu*f_RecoExpDistr->Eval(reco_pe))*weight_hit;
           // term = log(P_hit_mu*f_RecoExpDistr->Eval(reco_pe)/f_RecoExpDistr->Eval(exp(f_par1_trend->Eval(exp_ph)-pow(f_par2_trend->Eval(exp_ph),2))))*weight_hit;
-          // term = log(P_hit_mu*f_RecoExpDistr->Integral(reco_pe-sqrt(reco_pe),reco_pe+sqrt(reco_pe)))*weight_hit;
+          // term = log(P_hit_mu*f_RecoExpDistr->Integral(reco_pe-sqrt(reco_pe)*0.5, reco_pe+sqrt(reco_pe)*0.5, 0.001))*weight_hit;
           log_likelihood += term;
           reco_terms.push_back(term);
           // std::cout <<  "t " << term << " " << log_likelihood << std::endl;
         } else {
           f_RecoExpDistr->SetParameters(g_par1->Eval(exp_ph), g_par2->Eval(exp_ph));
           term = log(P_hit_mu*f_RecoExpDistr->Eval(reco_pe))*weight_hit;
+          // term = log(P_hit_mu*h2_exp_reco->Interpolate(reco_pe, exp_ph))*weight_hit;
           // term = log(P_hit_mu*f_RecoExpDistr->Eval(reco_pe)/f_RecoExpDistr->Eval(exp(g_par1->Eval(exp_ph)-pow(g_par2->Eval(exp_ph),2))))*weight_hit;
-          // term = log(P_hit_mu*f_RecoExpDistr->Integral(reco_pe-sqrt(reco_pe), reco_pe+sqrt(reco_pe)))*weight_hit;
+          // term = log(P_hit_mu*f_RecoExpDistr->Integral(reco_pe-sqrt(reco_pe)*0.5, reco_pe+sqrt(reco_pe)*0.5, 0.001))*weight_hit;
           log_likelihood += (term);
           reco_terms.push_back(term);
           // std::cout << "d " << term << " " << log_likelihood << std::endl;
@@ -191,15 +199,17 @@ public:
     }
 
     // std::cout << "xxx" << log_likelihood << std::endl;
+    x_reco *= x_sign;
+    // std::cout << log_likelihood << std::endl;
     return log_likelihood*weight_sum;
   } // GetLikelihoodMatch
 
   // LikelihoodComputer constructor
   LikelihoodComputer(TString visibility_file_name,
-                     size_t n_opdet,
+                     DuneGeom geom,
                      float drift_velocity,
                      float LY_times_PDE,
-                     TF1* f_reco_prob,
+                     TEfficiency* he_hit_prob,
                      TF1* f_RecoExpDistr,
                      TF1* f_par1_trend,
                      TF1* f_par2_trend,
@@ -211,10 +221,10 @@ public:
                      float corr_lambda,
                      TH2D* h2_exp_reco = nullptr)
     : visibility_file_name(visibility_file_name),
-    n_opdet(n_opdet),
+    geom(geom),
     drift_velocity(drift_velocity),
     LY_times_PDE(LY_times_PDE),
-    f_reco_prob(f_reco_prob),
+    he_hit_prob(he_hit_prob),
     f_RecoExpDistr(f_RecoExpDistr),
     f_par1_trend(f_par1_trend),
     f_par2_trend(f_par2_trend),
@@ -231,10 +241,11 @@ public:
 private:
   // take in input
   TString visibility_file_name;
-  size_t n_opdet;
+  DuneGeom geom;
   float drift_velocity;
   float LY_times_PDE;
   std::vector<std::vector<float>> opDet_visMapDirect;
+  TEfficiency* he_hit_prob;
   TF1* f_RecoExpDistr;
   TF1* f_par1_trend;
   TF1* f_par2_trend;
@@ -244,6 +255,8 @@ private:
   float calib_c, calib_slope, corr_lambda;
   TH2D* h2_exp_reco = nullptr; // Optional, can be nullptr
 
+  
+  
   // set inside the class
   TH1D* hgrid[3] = {nullptr};
   std::vector<int> cryo_to_tpc;
@@ -271,15 +284,19 @@ private:
 
     TTree* photoVisMap = (TTree*)visibility_file->Get("photovisAr/photoVisMap");
     const size_t n_entriesmap = photoVisMap->GetEntries();
-    float opDet_visDirect[n_opdet];
+    float opDet_visDirect[geom.n_opdet];
     photoVisMap->SetBranchAddress("opDet_visDirect", &opDet_visDirect);
-    opDet_visMapDirect.resize(n_entriesmap, std::vector<float>(n_opdet, 0.));
+    opDet_visMapDirect.resize(n_entriesmap, std::vector<float>(geom.n_opdet, 0.));
 
     for (size_t VisMapEntry = 0; VisMapEntry < n_entriesmap; ++VisMapEntry) {
       photoVisMap->GetEntry(VisMapEntry);
-      std::memcpy(opDet_visMapDirect[VisMapEntry].data(), &opDet_visDirect[0], n_opdet * sizeof(float));
+      std::memcpy(opDet_visMapDirect[VisMapEntry].data(), &opDet_visDirect[0], geom.n_opdet * sizeof(float));
     }
 
+    TGraph* g_he_graph = (TGraph*)he_hit_prob->CreateGraph();
+    xprob_max = g_he_graph->GetX()[g_he_graph->GetN()-1];
+    g_he = new TMVA::TSpline1("spline", g_he_graph);
+    
     return;
   } // 
 

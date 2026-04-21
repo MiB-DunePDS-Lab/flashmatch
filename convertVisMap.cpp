@@ -10,19 +10,30 @@
 
 
 
-int n_opdet = 480; // Number of optical detectors
-const std::string visibility_file_name = "dunevis_fdhd_1x2x6_test.root"; // File with the visibility maps
+int n_opdet = 184; // Number of optical detectors
+const std::string visibility_file_name_ar = "./visibility/raw/dunevis_fdvd_1x8x14_ar.root"; // File with the visibility maps
+const std::string visibility_file_name_xe = "./visibility/raw/dunevis_fdvd_1x8x14_xe.root"; // File with the visibility maps
+TString output_file_name = "./visibility/processed/dunevis_dunevd10kt.root"; // Output file name
+// TString output_file_name = "./visibility/processed/dunevis_dune10kt.root"; // Output file name
 const bool verbose = true; // Print progress messages
+const bool add_reflected = false; // Add reflected light to direct light in the output maps
 
 void convertVisMap(){
-  TFile* visibility_file = TFile::Open(visibility_file_name.c_str(), "READ");
-  TTree* photoVisMap = (TTree*)visibility_file->Get("photovisAr/photoVisMap");
+  TFile* visibility_file_ar = TFile::Open(visibility_file_name_ar.c_str(), "READ");
+  TTree* photovisAr = (TTree*)visibility_file_ar->Get("photovisAr/photoVisMap");
   TH1D* hgrid[3] = {nullptr};
-  hgrid[0] = (TH1D*)visibility_file->Get("photovisAr/hgrid0")->Clone("hgrid0");
-  hgrid[1] = (TH1D*)visibility_file->Get("photovisAr/hgrid1")->Clone("hgrid1");
-  hgrid[2] = (TH1D*)visibility_file->Get("photovisAr/hgrid2")->Clone("hgrid2");
+  hgrid[0] = (TH1D*)visibility_file_ar->Get("photovisAr/hgrid0")->Clone("hgrid0");
+  hgrid[1] = (TH1D*)visibility_file_ar->Get("photovisAr/hgrid1")->Clone("hgrid1");
+  hgrid[2] = (TH1D*)visibility_file_ar->Get("photovisAr/hgrid2")->Clone("hgrid2");
+
+  TFile* visibility_file_xe = nullptr;
+  TTree* photovisXe = nullptr;
+  if (visibility_file_name_xe != "") {
+    visibility_file_xe = TFile::Open(visibility_file_name_xe.c_str(), "READ");
+    photovisXe = (TTree*)visibility_file_xe->Get("photovisXe/photoVisMap");
+  }
   
-  TFile* out_file = new TFile("dunevis_fdhd_1x2x6_test_float.root", "RECREATE");
+  TFile* out_file = new TFile(output_file_name, "RECREATE");
   out_file->SetCompressionLevel(0);
 
   out_file->mkdir("photovisAr");
@@ -31,7 +42,7 @@ void convertVisMap(){
   hgrid[1]->Write();
   hgrid[2]->Write();
 
-  TTree* tDimensions = (TTree*)visibility_file->Get("photovisAr/tDimensions");
+  TTree* tDimensions = (TTree*)visibility_file_ar->Get("photovisAr/tDimensions");
   TTree* out_tDimensions = tDimensions->CloneTree();
   out_tDimensions->Write();
 
@@ -41,16 +52,31 @@ void convertVisMap(){
   out_tree->Branch("opDet_visDirect", floatVisMap, Form("opDet_visDirect[%d]/F", n_opdet));
   
 
-  const size_t n_entriesmap = photoVisMap->GetEntries();
-  TTreeReader VisMapReader(photoVisMap);
-  TTreeReaderArray<double> opDet_visDirect_reader(VisMapReader, "opDet_visDirect");
+  const size_t n_entriesmap = photovisAr->GetEntries();
+  TTreeReader VisMapReader_ar(photovisAr);
+  TTreeReaderArray<double> opDet_visDirect_reader_ar(VisMapReader_ar, "opDet_visDirect");
+  TTreeReaderArray<double> opDet_visReflct_reader_ar(VisMapReader_ar, "opDet_visReflct");
+
+  TTreeReader VisMapReader_xe = TTreeReader(photovisXe);
+  TTreeReaderArray<double> opDet_visDirect_reader_xe(VisMapReader_xe, "opDet_visDirect");
+  TTreeReaderArray<double> opDet_visReflct_reader_xe(VisMapReader_xe, "opDet_visReflct");
+  if (photovisXe) {
+    // VisMapReader_xe = TTreeReader(photovisXe);
+    opDet_visDirect_reader_xe = TTreeReaderArray<double>(VisMapReader_xe, "opDet_visDirect");
+    opDet_visReflct_reader_xe = TTreeReaderArray<double>(VisMapReader_xe, "opDet_visReflct");
+  }
 
   std::cout << "Filling maps..." << std::endl;
   auto start_time = std::chrono::high_resolution_clock::now();
-  int VisMapEntry = 0; int n_VisMapEntries = photoVisMap->GetEntries();
-  while (VisMapReader.Next()){
+  int VisMapEntry = 0; int n_VisMapEntries = photovisAr->GetEntries();
+  while (VisMapReader_ar.Next() && (!photovisXe || VisMapReader_xe.Next())) {
     for (size_t j = 0; j < n_opdet; ++j) {
-      floatVisMap[j] = static_cast<float>(opDet_visDirect_reader[j]);
+      floatVisMap[j] = static_cast<float>(opDet_visDirect_reader_ar[j]);
+      if (photovisXe) floatVisMap[j] += static_cast<float>(opDet_visDirect_reader_xe[j]);
+      if (add_reflected) {
+        floatVisMap[j] += static_cast<float>(opDet_visReflct_reader_ar[j]);
+        if (photovisXe) floatVisMap[j] += static_cast<float>(opDet_visReflct_reader_xe[j]);
+      }
     }
     VisMapEntry++;
     out_tree->Fill();
@@ -64,8 +90,8 @@ void convertVisMap(){
   
   out_tree->Write();
   out_file->Close();
-  visibility_file->Close();
+  visibility_file_ar->Close();
+  if (visibility_file_xe) visibility_file_xe->Close();
 
   return;
-
 }

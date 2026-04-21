@@ -1,0 +1,10 @@
+{
+  "input_dir":  "../data/testing_cheating_FM/ideal_clusters_and_flashes_no_bkg/",
+  "geom_identifier": "dune10kt",
+  "distribution": "lognormal",
+  "fit_trend_low": 40,
+  "fit_trend_up": 110,
+  "trend_thr": 90,
+  "q_cut_low": 150.0,
+  "apply_cut" :true
+}

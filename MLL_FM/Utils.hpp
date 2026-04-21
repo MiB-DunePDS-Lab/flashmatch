@@ -5,8 +5,9 @@
 #include <cstddef>
 #include <vector>
 #include <iostream>
-#include <filesystem>
 #include <fstream>
+#include <map>
+#include <stdexcept>
 #include <string>
 #include <nlohmann/json.hpp>
 
@@ -19,37 +20,9 @@
 #include <TMath.h>
 
 using json = nlohmann::json;
-namespace fs = std::filesystem;
 
 
 // --- PURE UTILITIES ---------------------------------------------------------
-
-inline std::vector<std::string> get_list_of_files_in_folder(std::string folder_name, std::string ends_with){
-  std::vector<std::string> result;
-
-  if (!fs::exists(folder_name) || !fs::is_directory(folder_name))
-    return result;
-
-  for (const auto& entry : fs::directory_iterator(folder_name))
-  {
-    if (!entry.is_regular_file())
-      continue;
-
-    std::string filename = entry.path().filename().string();
-
-    if (filename.size() >= ends_with.size() &&
-      filename.compare(filename.size() - ends_with.size(),
-                       ends_with.size(),
-                       ends_with) == 0)
-    {
-      result.push_back(filename);
-    }
-  }
-
-  return result;
-}
-
-
 template <typename T>
 std::vector<T> treeBranch_to_vector(TTree* tree, const std::string& branch_name) {
   std::vector<T> vec;
@@ -179,11 +152,11 @@ std::vector<int> GetCryoToTPCMap(TH1D* hgrid[3], T tpc_min[3], T tpc_max[3]){
 }
 
 template <typename T>
-bool isInFiducialVolume(T vertex_coor[3], T vol_min[3], T vol_max[3], T x_cut){
+bool isInFiducialVolume(T vertex_coor[3], T vol_min[3], T vol_max[3], T x_cut, T anode_x){
   return (vertex_coor[0] > vol_min[0] && vertex_coor[0] < vol_max[0] &&
           vertex_coor[1] > vol_min[1] && vertex_coor[1] < vol_max[1] &&
           vertex_coor[2] > vol_min[2] && vertex_coor[2] < vol_max[2] &&
-          abs(vertex_coor[0]) > x_cut);
+          abs(vertex_coor[0]-anode_x) > x_cut);
 }
 
 template <typename T>
@@ -236,37 +209,53 @@ inline double log_logistic_dist(double* x, double* par){
   if (x[0] <= 0) return 0.;
   double alpha = par[0];
   double beta = par[1];
-  double z = pow(x[0]/alpha, beta);
-  return (beta / alpha) * z / pow(1 + z, 2);
+  return (beta / alpha) * pow(x[0]/alpha, beta-1) / pow(1 + pow(x[0]/alpha, beta), 2);
 }
 
-struct MLLcconfigs{
-  std::string input_dir;
-  std::string visibility_file_name;
-  int max_nfiles;
+struct DuneGeom{
+  size_t n_opdet;
+  float anode_x;
+  std::map<int, std::pair<size_t, size_t>> opdets_per_plane; // plane -> (start_opdet, end_opdet)
+};
+
+inline DuneGeom load_dune_geom(const std::string& filename){
+  std::ifstream file(filename);
+  if (!file) {
+    throw std::runtime_error("Could not open geom config file: " + filename);
+  }
+
+  json j;
+  file >> j;
+  DuneGeom geom;
+  geom.n_opdet = j.at("n_opdet").get<size_t>();
+  geom.anode_x = j.at("anode_x").get<float>();
+  for (const auto& plane_entry : j.at("opdets_per_plane").items()) {
+    int plane = std::stoi(plane_entry.key());
+    size_t start_opdet = plane_entry.value().at(0).get<size_t>();
+    size_t end_opdet = plane_entry.value().at(1).get<size_t>();
+    geom.opdets_per_plane.emplace(plane, std::pair(start_opdet, end_opdet));
+  }
+
+  return geom;
+}
+
+struct MLLConfigs{
+  std::string ana_file_name;
+  std::string visibility_dir;
+  std::string sample_config_file;
   double fit_Qcorr_Etrue_low;
   double fit_Qcorr_Etrue_up;
-  float pe_low;
   float pe_up;
   float light_yield;
   float arapuca_pde;
-  size_t n_opdet;
   float min_visibility;
   float yz_fiducial_cut;
   float x_fiducial_cut;
   // bool verbose;
-  std::string distribution;
-  double fit_trend_low;
-  double fit_trend_up;
-  bool rebin_h2; // Rebin h2_exp_reco_norm
-  int rebinning; // Rebinning factor for h2_exp_reco_norm
-  double trend_thr;
-  bool apply_cut;                 
-  float q_cut_low;                
   float q_cut_high;  
 };
 
-inline MLLcconfigs load_ana_config(const std::string &filename){
+inline MLLConfigs load_ana_config(const std::string &filename){
   std::ifstream file(filename);
   if (!file) {
     throw std::runtime_error("Could not open config file: " + filename);
@@ -274,30 +263,51 @@ inline MLLcconfigs load_ana_config(const std::string &filename){
 
   json j;
   file >> j;
-  MLLcconfigs config;
-  config.input_dir            = j.at("input_dir").get<std::string>();
-  config.visibility_file_name = j.at("visibility_file_name").get<std::string>();
+  MLLConfigs config;
+  config.ana_file_name        = j.at("ana_file_name").get<std::string>();
+  config.visibility_dir       = j.at("visibility_dir").get<std::string>();
+  config.sample_config_file   = j.at("sample_config_file").get<std::string>();
   config.fit_Qcorr_Etrue_low  = j.at("fit_Qcorr_Etrue_low").get<double>();
   config.fit_Qcorr_Etrue_up   = j.at("fit_Qcorr_Etrue_up").get<double>();
-  config.max_nfiles           = j.at("max_nfiles").get<int>();
-  config.pe_low               = j.at("pe_low").get<float>();
   config.pe_up                = j.at("pe_up").get<float>();
   config.light_yield          = j.at("light_yield").get<float>();
   config.arapuca_pde          = j.at("arapuca_pde").get<float>();
-  config.n_opdet              = j.at("n_opdet").get<size_t>();
   config.min_visibility       = j.at("min_visibility").get<float>();
   config.yz_fiducial_cut      = j.at("yz_fiducial_cut").get<float>();
   config.x_fiducial_cut       = j.at("x_fiducial_cut").get<float>();
   // config.verbose              = j.at("verbose").get<bool>();
-  config.distribution         = j.at("distribution").get<std::string>();
-  config.fit_trend_low        = j.at("fit_trend_low").get<double>();
-  config.fit_trend_up         = j.at("fit_trend_up").get<double>();
-  config.rebin_h2             = j.at("rebin_h2").get<bool>();
-  config.rebinning            = j.at("rebinning").get<int>();
-  config.trend_thr            = j.at("trend_thr").get<double>();
-  config.apply_cut            = j.at("apply_cut").get<bool>();
-  config.q_cut_low            = j.at("q_cut_low").get<float>();
   config.q_cut_high           = j.at("q_cut_high").get<float>();
+  return config;
+}
+
+struct SampleConfigs{
+  std::string input_dir;
+  std::string geom_identifier;
+  std::string distribution;
+  double fit_trend_low;
+  double fit_trend_up;
+  double trend_thr;
+  double q_cut_low;
+  bool apply_cut;                 
+};
+
+inline SampleConfigs load_sample_config(const std::string &filename){
+  std::ifstream file(filename);
+  if (!file) {
+    throw std::runtime_error("Could not open config file: " + filename);
+  }
+
+  json j;
+  file >> j;
+  SampleConfigs config;
+  config.input_dir         = j.at("input_dir").get<std::string>();
+  config.geom_identifier   = j.at("geom_identifier").get<std::string>();
+  config.distribution      = j.at("distribution").get<std::string>();
+  config.fit_trend_low     = j.at("fit_trend_low").get<double>();
+  config.fit_trend_up      = j.at("fit_trend_up").get<double>();
+  config.trend_thr         = j.at("trend_thr").get<double>();
+  config.q_cut_low         = j.at("q_cut_low").get<double>();
+  config.apply_cut         = j.at("apply_cut").get<bool>();
   return config;
 }
 

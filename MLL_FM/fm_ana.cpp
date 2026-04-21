@@ -2,8 +2,11 @@
 #include <iostream>
 #include <vector>
 #include "RtypesCore.h"
+#include "TEfficiency.h"
 #include "TFile.h"
+#include "TGraph.h"
 #include "TGraphErrors.h"
+#include "TSpline.h"
 #include "TString.h"
 #include "TTree.h"
 
@@ -14,19 +17,24 @@ const size_t n_combinations = 10;
 
 void fm_ana(){
   // --- CONFIGS ---------------------------------------------------------------
-  MLLcconfigs f = load_ana_config("./config.json");
-  std::string input_dir        = f.input_dir;
-  float light_yield            = f.light_yield;
-  float arapuca_pde            = f.arapuca_pde;
-  size_t n_opdet               = f.n_opdet;
-  TString visibility_file_name = f.visibility_file_name;
-  double trend_thr             = f.trend_thr;
-  double q_cut_low             = f.q_cut_low;
+  MLLConfigs mll_conf = load_ana_config("./configs/ana_config.json");
+  std::string sample_config_file = mll_conf.sample_config_file;
+  float light_yield            = mll_conf.light_yield;
+  float arapuca_pde            = mll_conf.arapuca_pde;
+  std::string visibility_dir   = mll_conf.visibility_dir;
+  
+  SampleConfigs sample_conf = load_sample_config("./configs/"+sample_config_file);
+  std::string input_dir        = sample_conf.input_dir;
+  std::string geom_identifier  = sample_conf.geom_identifier;
+  double trend_thr             = sample_conf.trend_thr;
+  double q_cut_low             = sample_conf.q_cut_low;
   float LY_times_PDE           = light_yield * arapuca_pde;
+
+  DuneGeom geom = load_dune_geom("./configs/"+geom_identifier+".json");
   
 
   // --- INPUTS ---------------------------------------------------------------
-  TFile* calib_file = TFile::Open((input_dir+"MLL_Calibrator.root").c_str(), "READ");
+  TFile* calib_file = TFile::Open((input_dir+"MLL_Calibrator_"+geom_identifier+".root").c_str(), "READ");
   TTree* calib_tree = static_cast<TTree*>(calib_file->Get("calib_tree"));
   Float_t calib_c = 0.;         Float_t calib_slope = 0.;
   Float_t drift_velocity = 0.0; Float_t corr_lambda = 0.0;
@@ -36,7 +44,7 @@ void fm_ana(){
   calib_tree->SetBranchAddress("corr_lambda", &corr_lambda);
   calib_tree->GetEntry(0);
 
-  TFile* distribution_file = TFile::Open((input_dir+"MLL_Distributions.root").c_str(), "READ");
+  TFile* distribution_file = TFile::Open((input_dir+"MLL_Distributions_"+geom_identifier+".root").c_str(), "READ");
   TTree* tpc_pds_tree = static_cast<TTree*>(distribution_file->Get("tpc_pds_tree"));
   std::vector<size_t> MaxChargeIndxs = take_max_charge_indices(tpc_pds_tree, "iev", "charge");
   int ifile, iev;
@@ -59,14 +67,15 @@ void fm_ana(){
   tpc_pds_tree->SetBranchAddress("z_true", &z_true);
   tpc_pds_tree->SetBranchAddress("e_true", &e_true);
 
-  TFile* parametrizer_file  = TFile::Open((input_dir+"MLL_Parametrizer.root").c_str(), "READ");
-  TF1* f_reco_prob          = static_cast<TF1*>(parametrizer_file->Get("f_reco_prob"));
+  TFile* parametrizer_file  = TFile::Open((input_dir+"MLL_Parametrizer_"+geom_identifier+".root").c_str(), "READ");
   TF1* f_RecoExpDistr       = static_cast<TF1*>(parametrizer_file->Get("f_RecoExpDistr"));
   TF1* f_par1_trend         = static_cast<TF1*>(parametrizer_file->Get("f_par1_trend"));
   TF1* f_par2_trend         = static_cast<TF1*>(parametrizer_file->Get("f_par2_trend"));
   TH2D* h2_exp_reco         = static_cast<TH2D*>(parametrizer_file->Get("h2_exp_reco"));
   TGraphErrors* g_par1      = static_cast<TGraphErrors*>(parametrizer_file->Get("g_par1")); 
   TGraphErrors* g_par2      = static_cast<TGraphErrors*>(parametrizer_file->Get("g_par2"));
+
+  TEfficiency* he_hit_prob = static_cast<TEfficiency*>(parametrizer_file->Get("he_hit_prob"));
 
   // --- HISTOS -----------------------------------------------------------------
   TH1D* h_TrueRecoTerms = new TH1D("h_TrueRecoTerms",Form("%s;%s;%s","h_TrueRecoTerms","Reco Terms for True Match","counts"),
@@ -124,8 +133,8 @@ void fm_ana(){
 
   TH2D* h2_xreco_xtrue = new TH2D("h2_xreco_xtrue",
                                   Form("%s;%s;%s", "h2_xreco_xtrue", "X_{true}", "X_{reco}"),
-                                  200, 0, 360,
-                                  200, 0, 360);
+                                  200, -360, 360,
+                                  200, -360, 360);
 
   TH2D* h2_Ereco_Etrue = new TH2D("h2_Ereco_Etrue",
                                   Form("%s;%s;%s", "h2_Ereco_Etrue", "E_{true} [MeV]", "E_{reco} [MeV]"),
@@ -137,12 +146,13 @@ void fm_ana(){
                                  200, -650, 650, 200, -650, 650);
 
   // --- LikelihoodComputer -----------------------------------------------------
+  TString visibility_file_name = TString(visibility_dir+"dunevis_"+geom_identifier+".root");
   LikelihoodComputer likelihood_computer(
     visibility_file_name, // Visibility file name
-    n_opdet,              // Number of optical detectors
+    geom,                 // DUNE geometry
     drift_velocity,       // Drift velocity
     LY_times_PDE,         // Light yield times photo detector efficiency
-    f_reco_prob,          // Reconstruction probability function
+    he_hit_prob,          // Hit probability function (TEfficiency)
     f_RecoExpDistr,       // PDF for extrapolation
     f_par1_trend,         // Trend function for par1
     f_par2_trend,         // Trend function for par2
@@ -158,13 +168,17 @@ void fm_ana(){
 
   // --- LOOP OVER TPC-PDS CLUSTERS ---------------------------------------------
   float ntry = 0; float nmismatch = 0; float ninfinity = 0;
+  float x_sign = 0.;
   std::vector<float> LLs_true, LLs_fake, LLs_true_scaled;
   std::vector<ClusterTPC> fake_tpc_clusters;
   std::vector<VertexInfo> fake_vertex_info;
   // for (Long64_t entry = 0; entry < tpc_pds_tree->GetEntries(); entry++) {
   // for (Long64_t entry = 0; entry < 10000; entry++) {
   for (size_t entry : MaxChargeIndxs) {
+    if (entry % 100 == 0) std::cout <<entry<<"/"<< MaxChargeIndxs.size()<< "\r" << std::flush;
+    // if (entry>10000) break;
     tpc_pds_tree->GetEntry(entry);
+    x_sign = (x_true <= 0) ? -1. : 1.;
     // time_pds = -18;
     // if (time_pds > -13.8) continue;
 
@@ -196,9 +210,10 @@ void fm_ana(){
     }
 
     std::vector<float> true_reco_terms, true_noreco_terms;
-    float true_loglikelihood = likelihood_computer.GetLikelihoodMatch(true_tpc_cluster, true_pds_cluster, true_reco_terms, true_noreco_terms);
+    float true_loglikelihood = likelihood_computer.GetLikelihoodMatch(true_tpc_cluster, true_pds_cluster, true_reco_terms, true_noreco_terms, x_sign);
     // std::cout << "vvvv " << -true_loglikelihood << std::endl;
-    LLs_true.push_back(-true_loglikelihood);
+    // push back the true log-likelihood to the vector if not inf or nan
+    if (!std::isinf(true_loglikelihood) && !std::isnan(true_loglikelihood)) LLs_true.push_back(-true_loglikelihood);
     for (auto& term : true_reco_terms) h_TrueRecoTerms->Fill(-term);
     for (auto& term : true_noreco_terms) h_TrueNoRecoTerms->Fill(-term);
     float e_reco = likelihood_computer.E_reco;
@@ -221,10 +236,13 @@ void fm_ana(){
       if (delta_time < 0) continue; // Skip combinations where TPC time is before PDS time
      
       std::vector<float> fake_reco_terms, fake_noreco_terms;
-      float fake_loglikelihood = likelihood_computer.GetLikelihoodMatch(fake_tpc_clusters[i], true_pds_cluster, fake_reco_terms, fake_noreco_terms);
+      float fake_loglikelihood = likelihood_computer.GetLikelihoodMatch(fake_tpc_clusters[i], true_pds_cluster, fake_reco_terms, fake_noreco_terms, x_sign);
+      // float fake_loglikelihood = -8;
 
+      // if (!std::isinf(true_loglikelihood) && !std::isnan(true_loglikelihood) && !std::isinf(fake_loglikelihood) && !std::isnan(fake_loglikelihood)) continue; // Skip if both true and fake log-likelihoods are valid numbers (not inf or nan)
       LLs_true_scaled.push_back(-true_loglikelihood);
       LLs_fake.push_back(-fake_loglikelihood);
+      
       for (auto& term : fake_reco_terms) h_FakeRecoTerms->Fill(-term);
       for (auto& term : fake_noreco_terms) h_FakeNoRecoTerms->Fill(-term);
       ntry++;
@@ -275,15 +293,15 @@ void fm_ana(){
   std::cout << "Mismatch: " << nmismatch << "/" << ntry << "\t" << nmismatch/ntry*100 << std::endl;
   std::cout << "of which "  << ninfinity << "/" << nmismatch << " are infinite" << std::endl;
   std::printf("True matches : %.0f (%.3f%%) of reco_terms and %.0f (%.3f%%) of non-reco\n",
-              h_TrueRecoTerms->GetEntries(), h_TrueRecoTerms->GetEntries()/(n_opdet*h_LL->GetEntries())*100,
-              h_TrueNoRecoTerms->GetEntries(), h_TrueNoRecoTerms->GetEntries()/(n_opdet*h_LL->GetEntries())*100);
+              h_TrueRecoTerms->GetEntries(), h_TrueRecoTerms->GetEntries()/(geom.n_opdet*h_LL->GetEntries())*100,
+              h_TrueNoRecoTerms->GetEntries(), h_TrueNoRecoTerms->GetEntries()/(geom.n_opdet*h_LL->GetEntries())*100);
   std::printf("False matches %.0f (%.3f%%) of reco_terms and %.0f (%.3f%%) of non-reco\n",
-              h_FakeRecoTerms->GetEntries(), h_FakeRecoTerms->GetEntries()/(n_opdet*h_LL_fake->GetEntries())*100,
-              h_FakeNoRecoTerms->GetEntries(), h_FakeNoRecoTerms->GetEntries()/(n_opdet*h_LL_fake->GetEntries())*100);
+              h_FakeRecoTerms->GetEntries(), h_FakeRecoTerms->GetEntries()/(geom.n_opdet*h_LL_fake->GetEntries())*100,
+              h_FakeNoRecoTerms->GetEntries(), h_FakeNoRecoTerms->GetEntries()/(geom.n_opdet*h_LL_fake->GetEntries())*100);
   
 
   // --- WRITE OUTPUT ----------------------------------------------------------
-  TFile* out_file = TFile::Open((input_dir+"MLL_AnaOutput.root").c_str(), "RECREATE");
+  TFile* out_file = TFile::Open((input_dir+"MLL_AnaOutput_"+geom_identifier+".root").c_str(), "RECREATE");
   out_file->cd();
   h_LL->Write();
   h_LL_scale->Write();

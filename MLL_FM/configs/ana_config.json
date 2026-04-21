@@ -1,0 +1,17 @@
+{
+  "ana_file_name": "SolarNuAnaMerged.root",
+  "visibility_dir": "../visibility/processed/",
+  "sample_config_file": "no_bkg.json",
+  "q_cut_low": 150.0,
+  "q_cut_high":70000.0,
+  "fit_Qcorr_Etrue_low": 5,
+  "fit_Qcorr_Etrue_up": 30,
+  "pe_up": 300,
+  "light_yield": 20000,
+  "arapuca_pde": 0.03,
+  "min_visibility": 1e-15,
+  "yz_fiducial_cut": 20,
+  "x_fiducial_cut": 20,
+  "verbose": true,
+  "apply_cut" :true
+}

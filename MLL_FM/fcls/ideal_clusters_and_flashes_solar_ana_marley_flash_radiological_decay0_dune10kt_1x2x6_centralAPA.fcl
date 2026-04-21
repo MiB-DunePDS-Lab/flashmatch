@@ -1,0 +1,46 @@
+# Specific configuration for investigating energy depositions of signal events.
+# Run SolarNuAna on the output of a standard reco workflow for DUNE FD
+
+#include "solar_ana_flash_radiological_decay0_dune10kt_1x2x6_centralAPA.fcl"
+
+# physics.analyzers.solarnuana.SaveSignalDaughters: true
+physics.analyzers.solarnuana.FlashMatchBy: "cheat"
+# physics.analyzers.solarnuana.LikelihoodInputDir: "root://fndcadoor.fnal.gov:1094/pnfs/fnal.gov/usr/dune/data/users/fgalizzi/public/LikelihoodInputDir/"
+physics.analyzers.solarnuana.LikelihoodInputDir: "/exp/dune/data/users/fgalizzi/public/LikelihoodInputDir/"
+physics.analyzers.solarnuana.TrendThreshold: 20.0
+
+# Idealizing TPC clusters --------------------------------------------------------
+physics.analyzers.solarnuana.ClusterAlgoTime: 1000000
+physics.analyzers.solarnuana.ClusterAlgoAdjChannel: 10000000
+physics.analyzers.solarnuana.ClusterMatchNHit: 10
+physics.analyzers.solarnuana.ClusterMatchTime: 1000000
+physics.analyzers.solarnuana.ClusterMatchCharge: 1000000
+physics.analyzers.solarnuana.ClusterPreselectionNHits: 0
+physics.analyzers.solarnuana.MinClusterCharge: 0.
+physics.analyzers.solarnuana.AdjClusterRad: 1000000.
+# physics.analyzers.solarnuana.
+
+
+# Idealizing PDS flashes ---------------------------------------------------------
+physics.analyzers.solarnuana.OpFlashAlgoNHit: 0
+physics.analyzers.solarnuana.OpFlashAlgoMinTime: 1000000
+physics.analyzers.solarnuana.OpFlashAlgoMaxTime: 1000000
+physics.analyzers.solarnuana.OpFlashAlgoRad: 1000000
+physics.analyzers.solarnuana.OpFlashAlgoPE: 0
+physics.analyzers.solarnuana.OpFlashAlgoTriggerPE: 0
+physics.analyzers.solarnuana.OpFlashAlgoHotVertexThld: 0
+physics.analyzers.solarnuana.AdjOpFlashX: 1000000
+physics.analyzers.solarnuana.AdjOpFlashY: 1000000
+physics.analyzers.solarnuana.AdjOpFlashZ: 1000000
+physics.analyzers.solarnuana.AdjOpFlashMinNHitCut: 0
+physics.analyzers.solarnuana.AdjOpFlashMaxPERatioCut: 1000000
+physics.analyzers.solarnuana.AdjOpFlashMinPECut: 0
+physics.analyzers.solarnuana.AdjOpFlashMaxPECut: 1000000
+physics.analyzers.solarnuana.AdjOpFlashMinPEAttenuate: "flat"
+physics.analyzers.solarnuana.AdjOpFlashMaxPEAttenuate: "flat"
+# physics.analyzers.solarnuana.
+
+
+
+# physics.analyzers.solarnuana.SaveSignalEDep: true
+# physics.analyzers.solarnuana.SaveSignalOpHits: true
