@@ -36,6 +36,7 @@ void fm_distributions(){
   
   DuneGeom geom = load_dune_geom("./configs/"+geom_identifier+".json");
   const size_t n_opdet = geom.n_opdet;
+  float anode_x = geom.anode_x;
 
   // --- INPUTS ---------------------------------------------------------------
   // Calibration fit + correction lambda and drift velocity
@@ -67,7 +68,6 @@ void fm_distributions(){
   float tpc_max[3] = {float(coor_dim[0]), float(coor_dim[1]), float(coor_dim[2])}; // x,y,z
   float vol_min[3] = {tpc_min[0]+x_cut, tpc_min[1]+fiducial_cut, tpc_min[2]+fiducial_cut};
   float vol_max[3] = {tpc_max[0]-x_cut, tpc_max[1]-fiducial_cut, tpc_max[2]-fiducial_cut};
-  float anode_x = (geom_identifier == "dune10kt") ? tpc_max[0]+tpc_min[0] : tpc_max[0];
   std::vector<int> cryo_to_tpc = GetCryoToTPCMap(hgrid, tpc_min, tpc_max); // Get the mapping from cryostat voxel to TPC voxel
   
   TTree* photoVisMap = (TTree*)visibility_file->Get("photovisAr/photoVisMap");
