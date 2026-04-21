@@ -30,7 +30,7 @@ void fm_ana(){
   double q_cut_low             = sample_conf.q_cut_low;
   float LY_times_PDE           = light_yield * arapuca_pde;
 
-  size_t n_opdet = (geom_identifier == "dune10kt") ? 480 : 184;
+  DuneGeom geom = load_dune_geom("./configs/"+geom_identifier+".json");
   
 
   // --- INPUTS ---------------------------------------------------------------
@@ -45,11 +45,6 @@ void fm_ana(){
   calib_tree->GetEntry(0);
 
   TFile* distribution_file = TFile::Open((input_dir+"MLL_Distributions_"+geom_identifier+".root").c_str(), "READ");
-  float anode_x = 0.;
-  TTree* anode_tree = static_cast<TTree*>(distribution_file->Get("anode_tree"));
-  anode_tree->SetBranchAddress("anode_x", &anode_x);
-  anode_tree->GetEntry(0);
-
   TTree* tpc_pds_tree = static_cast<TTree*>(distribution_file->Get("tpc_pds_tree"));
   std::vector<size_t> MaxChargeIndxs = take_max_charge_indices(tpc_pds_tree, "iev", "charge");
   int ifile, iev;
@@ -154,8 +149,7 @@ void fm_ana(){
   TString visibility_file_name = TString(visibility_dir+"dunevis_"+geom_identifier+".root");
   LikelihoodComputer likelihood_computer(
     visibility_file_name, // Visibility file name
-    n_opdet,              // Number of optical detectors
-    anode_x,
+    geom,                 // DUNE geometry
     drift_velocity,       // Drift velocity
     LY_times_PDE,         // Light yield times photo detector efficiency
     he_hit_prob,          // Hit probability function (TEfficiency)
@@ -299,11 +293,11 @@ void fm_ana(){
   std::cout << "Mismatch: " << nmismatch << "/" << ntry << "\t" << nmismatch/ntry*100 << std::endl;
   std::cout << "of which "  << ninfinity << "/" << nmismatch << " are infinite" << std::endl;
   std::printf("True matches : %.0f (%.3f%%) of reco_terms and %.0f (%.3f%%) of non-reco\n",
-              h_TrueRecoTerms->GetEntries(), h_TrueRecoTerms->GetEntries()/(n_opdet*h_LL->GetEntries())*100,
-              h_TrueNoRecoTerms->GetEntries(), h_TrueNoRecoTerms->GetEntries()/(n_opdet*h_LL->GetEntries())*100);
+              h_TrueRecoTerms->GetEntries(), h_TrueRecoTerms->GetEntries()/(geom.n_opdet*h_LL->GetEntries())*100,
+              h_TrueNoRecoTerms->GetEntries(), h_TrueNoRecoTerms->GetEntries()/(geom.n_opdet*h_LL->GetEntries())*100);
   std::printf("False matches %.0f (%.3f%%) of reco_terms and %.0f (%.3f%%) of non-reco\n",
-              h_FakeRecoTerms->GetEntries(), h_FakeRecoTerms->GetEntries()/(n_opdet*h_LL_fake->GetEntries())*100,
-              h_FakeNoRecoTerms->GetEntries(), h_FakeNoRecoTerms->GetEntries()/(n_opdet*h_LL_fake->GetEntries())*100);
+              h_FakeRecoTerms->GetEntries(), h_FakeRecoTerms->GetEntries()/(geom.n_opdet*h_LL_fake->GetEntries())*100,
+              h_FakeNoRecoTerms->GetEntries(), h_FakeNoRecoTerms->GetEntries()/(geom.n_opdet*h_LL_fake->GetEntries())*100);
   
 
   // --- WRITE OUTPUT ----------------------------------------------------------

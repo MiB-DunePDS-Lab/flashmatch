@@ -210,6 +210,33 @@ inline double log_logistic_dist(double* x, double* par){
   return (beta / alpha) * pow(x[0]/alpha, beta-1) / pow(1 + pow(x[0]/alpha, beta), 2);
 }
 
+struct DuneGeom{
+  size_t n_opdet;
+  float anode_x;
+  std::map<int, std::pair<size_t, size_t>> opdets_per_plane; // plane -> (start_opdet, end_opdet)
+};
+
+inline DuneGeom load_dune_geom(const std::string& filename){
+  std::ifstream file(filename);
+  if (!file) {
+    throw std::runtime_error("Could not open geom config file: " + filename);
+  }
+
+  json j;
+  file >> j;
+  DuneGeom geom;
+  geom.n_opdet = j.at("n_opdet").get<size_t>();
+  geom.anode_x = j.at("anode_x").get<float>();
+  for (const auto& plane_entry : j.at("opdets_per_plane").items()) {
+    int plane = std::stoi(plane_entry.key());
+    size_t start_opdet = plane_entry.value().at(0).get<size_t>();
+    size_t end_opdet = plane_entry.value().at(1).get<size_t>();
+    geom.opdets_per_plane.emplace(plane, std::pair(start_opdet, end_opdet));
+  }
+
+  return geom;
+}
+
 struct MLLConfigs{
   std::string ana_file_name;
   std::string visibility_dir;

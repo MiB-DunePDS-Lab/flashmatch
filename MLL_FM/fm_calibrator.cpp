@@ -29,22 +29,13 @@ void fm_calibrator(){
   std::string geom_identifier    = sample_conf.geom_identifier;
   float q_cut_low                = sample_conf.q_cut_low;
 
-  TString visibility_file_name     = TString(visibility_dir+"dunevis_"+geom_identifier+".root");
+  DuneGeom geom = load_dune_geom("./configs/"+geom_identifier+".json");
+
+  TString visibility_file_name = TString(visibility_dir+"dunevis_"+geom_identifier+".root");
   
   // --- EXTRA VARIABLES -------------------------------------------------------
   std::vector<std::tuple<float, float, float, float>> true_calib_info; // 
   float drift_velocity = 360./2244.44; // HARD CODED: Drift velocity in cm/tick
-
-  TFile* visibility_file = TFile::Open(visibility_file_name, "READ");
-  TTree* tDimensions = (TTree*)visibility_file->Get("photovisAr/tDimensions");
-  Double_t coor_dim[3] = {0.};
-  tDimensions->SetBranchAddress("dimension", coor_dim);
-  tDimensions->GetEntry(0);
-  float tpc_min[3] = {float(coor_dim[0]), float(coor_dim[1]), float(coor_dim[2])}; // x,y,z
-  tDimensions->GetEntry(1);
-  float tpc_max[3] = {float(coor_dim[0]), float(coor_dim[1]), float(coor_dim[2])}; // x,y,z
-  float anode_x = (geom_identifier == "dune10kt") ? tpc_max[0]+tpc_min[0] : tpc_max[0];
-  
 
   ana_file_name = input_dir+ana_file_name;
   if(!std::filesystem::exists(ana_file_name)) printf("File %s does not exist. Exiting.\n", ana_file_name.c_str());
@@ -64,7 +55,7 @@ void fm_calibrator(){
   for (auto& idx_entry : MaxChargeIndxs){
     treeReader.SetEntry(idx_entry);
     if (!(*MatchedOpFlashCorrectly) || *Charge<q_cut_low || *Charge>q_cut_high) continue;
-    float driftTime = abs((*x_true-anode_x)/drift_velocity);
+    float driftTime = abs((*x_true-geom.anode_x)/drift_velocity);
     true_calib_info.push_back(std::make_tuple(*Charge, *E_true, driftTime, *Charge/(*E_true)));
   }
   printf("Entries passing cuts: %lu\n", true_calib_info.size());

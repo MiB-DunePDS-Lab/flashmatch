@@ -132,7 +132,7 @@ public:
     float delta_time = tpc_cluster.time_tpc - pds_cluster.time_pds ;
     E_reco = give_me_Ereco(calib_c, calib_slope, corr_lambda, delta_time, tpc_cluster.charge);
     float reco_pe, exp_ph;
-    x_reco = delta_time*drift_velocity+anode_x;
+    x_reco = delta_time*drift_velocity+geom.anode_x;
     float vertex_coor[3] = {x_reco, tpc_cluster.y_reco, tpc_cluster.z_reco};
     vertex_coor[0] = std::max(vertex_coor[0], tpc_min[0]+15); vertex_coor[0] = std::min(vertex_coor[0], tpc_max[0]-15);
     vertex_coor[1] = std::max(vertex_coor[1], tpc_min[1]+15); vertex_coor[1] = std::min(vertex_coor[1], tpc_max[1]-15);
@@ -146,7 +146,7 @@ public:
     float term = 0.;
     float n_hit = std::count_if(pds_cluster.reco_pes->begin(), pds_cluster.reco_pes->end(), [](float pe){ return pe > 0; });
 
-    if (n_opdet != pds_cluster.reco_pes->size()){
+    if (geom.n_opdet != pds_cluster.reco_pes->size()){
       std::cerr << "Error: Number of OPDet does not match the size of reco_pes vector!" << std::endl;
       exit(1);
     }
@@ -174,17 +174,18 @@ public:
         n_hit++;
         if (reco_pe > trend_thr){
           f_RecoExpDistr->SetParameters(f_par1_trend->Eval(exp_ph), f_par2_trend->Eval(exp_ph));
-          // term = log(P_hit_mu*f_RecoExpDistr->Eval(reco_pe))*weight_hit;
+          term = log(P_hit_mu*f_RecoExpDistr->Eval(reco_pe))*weight_hit;
           // term = log(P_hit_mu*f_RecoExpDistr->Eval(reco_pe)/f_RecoExpDistr->Eval(exp(f_par1_trend->Eval(exp_ph)-pow(f_par2_trend->Eval(exp_ph),2))))*weight_hit;
-          term = log(P_hit_mu*f_RecoExpDistr->Integral(reco_pe-sqrt(reco_pe)*0.5, reco_pe+sqrt(reco_pe)*0.5, 0.001))*weight_hit;
+          // term = log(P_hit_mu*f_RecoExpDistr->Integral(reco_pe-sqrt(reco_pe)*0.5, reco_pe+sqrt(reco_pe)*0.5, 0.001))*weight_hit;
           log_likelihood += term;
           reco_terms.push_back(term);
           // std::cout <<  "t " << term << " " << log_likelihood << std::endl;
         } else {
           f_RecoExpDistr->SetParameters(g_par1->Eval(exp_ph), g_par2->Eval(exp_ph));
-          // term = log(P_hit_mu*f_RecoExpDistr->Eval(reco_pe))*weight_hit;
+          term = log(P_hit_mu*f_RecoExpDistr->Eval(reco_pe))*weight_hit;
+          // term = log(P_hit_mu*h2_exp_reco->Interpolate(reco_pe, exp_ph))*weight_hit;
           // term = log(P_hit_mu*f_RecoExpDistr->Eval(reco_pe)/f_RecoExpDistr->Eval(exp(g_par1->Eval(exp_ph)-pow(g_par2->Eval(exp_ph),2))))*weight_hit;
-          term = log(P_hit_mu*f_RecoExpDistr->Integral(reco_pe-sqrt(reco_pe)*0.5, reco_pe+sqrt(reco_pe)*0.5, 0.001))*weight_hit;
+          // term = log(P_hit_mu*f_RecoExpDistr->Integral(reco_pe-sqrt(reco_pe)*0.5, reco_pe+sqrt(reco_pe)*0.5, 0.001))*weight_hit;
           log_likelihood += (term);
           reco_terms.push_back(term);
           // std::cout << "d " << term << " " << log_likelihood << std::endl;
@@ -205,8 +206,7 @@ public:
 
   // LikelihoodComputer constructor
   LikelihoodComputer(TString visibility_file_name,
-                     size_t n_opdet,
-                     float anode_x,
+                     DuneGeom geom,
                      float drift_velocity,
                      float LY_times_PDE,
                      TEfficiency* he_hit_prob,
@@ -221,8 +221,7 @@ public:
                      float corr_lambda,
                      TH2D* h2_exp_reco = nullptr)
     : visibility_file_name(visibility_file_name),
-    n_opdet(n_opdet),
-    anode_x(anode_x),
+    geom(geom),
     drift_velocity(drift_velocity),
     LY_times_PDE(LY_times_PDE),
     he_hit_prob(he_hit_prob),
@@ -242,8 +241,7 @@ public:
 private:
   // take in input
   TString visibility_file_name;
-  size_t n_opdet;
-  float anode_x;
+  DuneGeom geom;
   float drift_velocity;
   float LY_times_PDE;
   std::vector<std::vector<float>> opDet_visMapDirect;
@@ -286,13 +284,13 @@ private:
 
     TTree* photoVisMap = (TTree*)visibility_file->Get("photovisAr/photoVisMap");
     const size_t n_entriesmap = photoVisMap->GetEntries();
-    float opDet_visDirect[n_opdet];
+    float opDet_visDirect[geom.n_opdet];
     photoVisMap->SetBranchAddress("opDet_visDirect", &opDet_visDirect);
-    opDet_visMapDirect.resize(n_entriesmap, std::vector<float>(n_opdet, 0.));
+    opDet_visMapDirect.resize(n_entriesmap, std::vector<float>(geom.n_opdet, 0.));
 
     for (size_t VisMapEntry = 0; VisMapEntry < n_entriesmap; ++VisMapEntry) {
       photoVisMap->GetEntry(VisMapEntry);
-      std::memcpy(opDet_visMapDirect[VisMapEntry].data(), &opDet_visDirect[0], n_opdet * sizeof(float));
+      std::memcpy(opDet_visMapDirect[VisMapEntry].data(), &opDet_visDirect[0], geom.n_opdet * sizeof(float));
     }
 
     TGraph* g_he_graph = (TGraph*)he_hit_prob->CreateGraph();

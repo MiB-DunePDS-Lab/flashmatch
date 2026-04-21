@@ -33,7 +33,9 @@ void fm_distributions(){
   std::string geom_identifier      = sample_conf.geom_identifier;
 
   TString visibility_file_name     = TString(visibility_dir+"dunevis_"+geom_identifier+".root");
-  const size_t n_opdet = (geom_identifier == "dune10kt") ? 480 : 184;
+  
+  DuneGeom geom = load_dune_geom("./configs/"+geom_identifier+".json");
+  const size_t n_opdet = geom.n_opdet;
 
   // --- INPUTS ---------------------------------------------------------------
   // Calibration fit + correction lambda and drift velocity
@@ -92,7 +94,7 @@ void fm_distributions(){
   float x_true, y_true, z_true, e_true;
   std::vector<float>* reco_pes          = nullptr;
   std::vector<float>* exp_phs           = nullptr;
-  std::vector<int>* opdets           = nullptr;
+  std::vector<int>* opdets              = nullptr;
 
   tpc_pds_tree->Branch("ifile",     &ifile);
   tpc_pds_tree->Branch("iev",       &iev);
@@ -160,6 +162,14 @@ void fm_distributions(){
                                Form("%s;%s;%s", "h2_exp_reco", "Reco #Pe", "Expected #Pe"),
                                bin_lower_edges.size()-1, bin_lower_edges.data(),
                                bin_lower_edges.size()-1, bin_lower_edges.data());
+  
+  // TGraph for Poisson hit probability vs expected PE. Same x-axis binning as h_exp and h_expreco
+  TGraph* g_poisson_hitprob = new TGraph();
+  g_poisson_hitprob->SetName("g_poisson_hitprob");
+  g_poisson_hitprob->SetTitle("Poisson Hit Probability;Expected #Pe;Hit Probability");
+  for (size_t i=1; i<=h_exp->GetNbinsX(); i++) {
+    g_poisson_hitprob->SetPoint(g_poisson_hitprob->GetN(), h_exp->GetBinCenter(i), 1. - TMath::Poisson(0, h_exp->GetBinCenter(i)));
+  }
 
   ana_file->cd();
   TTree* solarnu_tree = static_cast<TTree*>(ana_file->Get("solarnuana/SolarNuAnaTree"));
@@ -241,6 +251,9 @@ void fm_distributions(){
 
     for(size_t idx_opdet=0; idx_opdet<n_opdet; idx_opdet++){
       float voxel_vis = opDet_visMapDirect[tpc_index][idx_opdet];// + opDet_visMapReflct[tpc_index][idx_opdet];
+      if (idx_opdet<geom.opdets_per_plane[0].first or idx_opdet>geom.opdets_per_plane[0].second) {
+        voxel_vis = 0.;
+      }
       float reco_pe = 0.; float exp_ph = 0.;
       exp_ph = e_reco*LY_times_PDE*voxel_vis; // Expected photons
       if(exp_ph==0.) exp_ph = e_reco*LY_times_PDE*min_visibility; 
@@ -279,6 +292,7 @@ void fm_distributions(){
   h_expreco->Write();
   he_hit_prob->Write();
   h2_exp_reco->Write();
+  g_poisson_hitprob->Write();
   out_file->Close();
 
   return;
