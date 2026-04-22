@@ -246,7 +246,8 @@ void fm_distributions(){
 
     charge = Charge;
     double dt = tpc_time - MatchedOpFlashTime;
-    my_x_reco = dt*drift_velocity;
+    float x_sign = (geom_identifier == "dune10kt" && x_true <= 0) ? -1. : 1.;
+    my_x_reco = (geom_identifier=="dune10kt") ? geom.anode_x+x_sign*dt*drift_velocity : geom.anode_x-dt*drift_velocity;
     e_reco = give_me_Ereco(calib_c, calib_slope, corr_lambda, dt, charge);
     time_pds = MatchedOpFlashTime;
     time_tpc = tpc_time;
