@@ -213,6 +213,7 @@ inline double log_logistic_dist(double* x, double* par){
 }
 
 struct DuneGeom{
+  std::string geom_identifier;
   size_t n_opdet;
   float anode_x;
   std::map<int, std::pair<size_t, size_t>> opdets_per_plane; // plane -> (start_opdet, end_opdet)
@@ -227,8 +228,9 @@ inline DuneGeom load_dune_geom(const std::string& filename){
   json j;
   file >> j;
   DuneGeom geom;
-  geom.n_opdet = j.at("n_opdet").get<size_t>();
-  geom.anode_x = j.at("anode_x").get<float>();
+  geom.geom_identifier = j.at("geom_identifier").get<std::string>();
+  geom.n_opdet         = j.at("n_opdet").get<size_t>();
+  geom.anode_x         = j.at("anode_x").get<float>();
   for (const auto& plane_entry : j.at("opdets_per_plane").items()) {
     int plane = std::stoi(plane_entry.key());
     size_t start_opdet = plane_entry.value().at(0).get<size_t>();
@@ -253,6 +255,8 @@ struct MLLConfigs{
   float x_fiducial_cut;
   // bool verbose;
   float q_cut_high;  
+  size_t n_combinations;
+  bool loop_on_tpc_clusters;
 };
 
 inline MLLConfigs load_ana_config(const std::string &filename){
@@ -277,6 +281,8 @@ inline MLLConfigs load_ana_config(const std::string &filename){
   config.x_fiducial_cut       = j.at("x_fiducial_cut").get<float>();
   // config.verbose              = j.at("verbose").get<bool>();
   config.q_cut_high           = j.at("q_cut_high").get<float>();
+  config.n_combinations       = j.at("n_combinations").get<size_t>();
+  config.loop_on_tpc_clusters = j.at("loop_on_tpc_clusters").get<bool>();
   return config;
 }
 
