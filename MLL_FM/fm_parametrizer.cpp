@@ -29,8 +29,8 @@ void fm_parametrizer(){
   // Create and fit the reco|expected distributions ---------------------------
   TF1* f_RecoExpDistr = nullptr;
   if (distribution == "lognormal") {
-    f_RecoExpDistr = new TF1("f_RecoExpDistr", "ROOT::Math::lognormal_pdf(x,[0],[1])", 0, 2000);
-    f_RecoExpDistr->SetParNames("log(m)", "#sigma");
+     f_RecoExpDistr = new TF1("f_RecoExpDistr", "[0]*ROOT::Math::lognormal_pdf(x-[2],[1],[3])", 0.2, 2000);
+     f_RecoExpDistr->SetParNames("A", "mu", "sigma", "shift"); 
   }
   else if (distribution == "weibull") {
     f_RecoExpDistr = new TF1("f_RecoExpDistr", weibull_dist, 0., 2000., 2);
@@ -64,11 +64,16 @@ void fm_parametrizer(){
       h1_proj->Scale(1./(h1_proj_integral), "width");
       
       double mean   = h1_proj->GetBinCenter(h1_proj->GetMaximumBin());
+      if (mean <= 0.3) mean = 0.3 + 0.1; 
       double stddev = h1_proj->GetStdDev();
-
+      double xmin = 0.3 + 1e-3;       
+      
       if (distribution == "lognormal") {
-        f_RecoExpDistr->SetParameters(log(mean), 0.25);
-        f_RecoExpDistr->SetParLimits(0, log(mean-5*stddev), log(mean+5*stddev));
+        f_RecoExpDistr->SetParameters(h1_proj_integral,log(mean),0.5,0.3);  
+        f_RecoExpDistr->SetParNames("A","mu","sigma","shift");
+        f_RecoExpDistr->FixParameter(2, 0.3);
+        f_RecoExpDistr->SetParLimits(1, 0.5, 5.0);
+        f_RecoExpDistr->SetParLimits(3, 0.2, 1.5); 
       }
       else if (distribution == "weibull") {
         f_RecoExpDistr->SetParameters(1.5, mean/1.2);
@@ -86,7 +91,7 @@ void fm_parametrizer(){
       }
 
       TFitResultPtr fit_res = nullptr;
-      if (h1_proj->GetEntries() > 400) fit_res = h1_proj->Fit(f_RecoExpDistr, "Q", "", std::max(0.,mean-5*stddev), mean+5*stddev);
+      if (h1_proj->GetEntries() > 400) fit_res = h1_proj->Fit(f_RecoExpDistr, "QR", "", xmin, mean+5*stddev);
       h1_proj->SetName(Form("h1_proj_%ip%i_pe", (int)h2_exp_reco->GetYaxis()->GetBinCenter(idx_y), (int)(h2_exp_reco->GetYaxis()->GetBinCenter(idx_y)*10)%10));
       h1_proj->Write();
 
@@ -94,7 +99,6 @@ void fm_parametrizer(){
         h2_exp_reco->SetBinContent(idx_x, idx_y, h1_proj->GetBinContent(idx_x));
       } 
 
-      
       double exp_ph = h2_exp_reco->GetYaxis()->GetBinCenter(idx_y);
       // if (reco > 400) break; // Stop if reco is greater than 40
       if (exp_ph > 0 && h1_proj->GetEntries() > 400 && fit_res==0){
@@ -118,23 +122,16 @@ void fm_parametrizer(){
   TF1* f_par2_trend = nullptr;
   if (distribution == "lognormal") {
     g_par1->SetTitle("log(MPV) vs Expected Photons;#Expected Photons;log(MPV)");
-    f_par1_trend = new TF1("f_par1_trend", "[0]+[1]*log(x+[2])", 0., 2000);
-    f_par1_trend->SetParNames("offset","log_slope","linear_slope");
-    f_par1_trend->SetParameters(-0.5,1.2,1.0);  
-    f_par1_trend->SetParLimits(1, 0.2, 2.0);
-    f_par1_trend->SetParLimits(2, 0.0, 10.0);
+    f_par1_trend = new TF1("f_par1_trend", "[0]+[1]*pow(1+x/[3],-[2])", 0., 2000);  
+    f_par1_trend->SetParNames("offset","amplitude","exponent","x scale");
+    f_par1_trend->SetParameters(0.9,0.63,1.0,2.65); 
   
     g_par2->SetTitle("#sigma vs Expected Photons;#Expected Photons;#sigma");
-    // f_par2_trend = new TF1("f_par2_trend","([0] + [1]*x + [2]*x*x)/(1 + [3]*x + [4]*x*x)", 0., 2000);
-    // f_par2_trend->SetParameters(0.6, 0.01,0.0001,0.05,0.0002);
-    // f_par2_trend->SetParLimits(2,0,10);    
-    // f_par2_trend->SetParLimits(4,0,10);   
-    f_par2_trend = new TF1("f_par2_trend", "[0]+[1]*exp([2]*(x-[3]))", 0., 2000);
-    f_par2_trend->SetParNames("offset","exp_slope","exp_rate","exp_x0");
-    f_par2_trend->SetParameters(0.3, 0.5, -0.03, -9);
-    f_par2_trend->SetParLimits(0, 0.3, 1.);
-    // f_par2_trend->SetParLimits(1, 0.0, 5.0);
-    // f_par2_trend->SetParLimits(2, -0.01, 0.0);
+    f_par2_trend = new TF1("f_par2_trend","([0] + [1]*x + [2]*x*x)/(1 + [3]*x)", 0.6, 2000);
+    f_par2_trend->SetParNames("offset","linear_coeff","quadratic_coeff","denominator_slope");
+    f_par2_trend->SetParameters(0.5, 0.05,0.0001,0.001);
+    f_par2_trend->SetParLimits(2,0,1);    
+    f_par2_trend->SetParLimits(3,0,10);  
   }
   else if (distribution == "weibull") {
     g_par1->SetTitle("k vs Expected Photons;#Expected Photons;k");
@@ -152,14 +149,14 @@ void fm_parametrizer(){
   }
   else {
     g_par1->SetTitle("k vs Expected Photons;Expected Photons;k");
-    f_par1_trend = new TF1("f_par1_trend", "[0]+[1]*x", 0., 2000.);
-    f_par1_trend->SetParNames("const", "log_slope");
-    f_par1_trend->SetParameters(.5, 1.2);
+    f_par1_trend = new TF1("f_par1_trend", "[0] + [1]*log(1+x) + [2]*sqrt(x)", 1, 2000.);
+    f_par1_trend->SetParNames("K_base","K_logTerm","K_sqrtTerm");
+    f_par1_trend->SetParameters(2.2,0.4,0.7);
   
     g_par2->SetTitle("#theta vs Expected Photons;Expected Photons;#theta");
-    f_par2_trend = new TF1("f_par2_trend", "[2]+[1]*sqrt([0]*x)", 0., 2000.);
-    f_par2_trend->SetParNames("b", "A", "const");
-    f_par2_trend->SetParameters(2., 1., -0.5);
+    f_par2_trend = new TF1("f_par2_trend", "[0]*(1 - exp(-x/[1]))", 0.5, 2000.);
+    f_par2_trend->SetParNames("b", "A");
+    f_par2_trend->SetParameters(0.5,10);
   }
   f_par1_trend->SetNpx(3000); f_par2_trend->SetNpx(3000);
   g_par1->Fit(f_par1_trend, "", "", fit_trend_low, fit_trend_up); 
