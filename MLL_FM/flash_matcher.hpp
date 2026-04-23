@@ -174,7 +174,7 @@ public:
       reco_pe = pds_cluster.reco_pes.at(idx_opdet);
 
       if (reco_pe>0.0){
-        if (reco_pe > trend_thr){
+        if (exp_ph > trend_thr){
           f_RecoExpDistr->SetParameters(f_par1_trend->Eval(exp_ph), f_par2_trend->Eval(exp_ph));
           term = -log(P_hit_mu*f_RecoExpDistr->Eval(reco_pe))*weight_hit;
           // term = -log(P_hit_mu*f_RecoExpDistr->Eval(reco_pe)/f_RecoExpDistr->Eval(exp(f_par1_trend->Eval(exp_ph)-pow(f_par2_trend->Eval(exp_ph),2))))*weight_hit;
