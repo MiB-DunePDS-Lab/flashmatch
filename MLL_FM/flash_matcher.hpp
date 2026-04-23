@@ -6,7 +6,6 @@
 #include <numeric>
 
 #include "TEfficiency.h"
-#include "TGraphAsymmErrors.h"
 #include <TMVA/TSpline1.h>
 #include <vector>
 #include "Utils.hpp"
@@ -17,16 +16,6 @@ class VertexInfo {
     float y;
     float z;
     float energy;
-
-    VertexInfo& operator=(const VertexInfo& other) {
-      if (this != &other) {
-        x = other.x;
-        y = other.y;
-        z = other.z;
-        energy = other.energy;
-      }
-      return *this;
-    }
 
     bool operator==(const VertexInfo& other) {
       return (x == other.x && y == other.y && z == other.z && energy == other.energy);
@@ -45,16 +34,6 @@ class ClusterTPC{
     float time_tpc;
     float y_reco;
     float z_reco;
-
-    ClusterTPC& operator=(const ClusterTPC& other) {
-      if (this != &other) {
-        charge = other.charge;
-        time_tpc = other.time_tpc;
-        y_reco = other.y_reco;
-        z_reco = other.z_reco;
-      }
-      return *this;
-    }
 
     bool operator==(const ClusterTPC& other) {
       return (charge == other.charge &&
@@ -82,23 +61,10 @@ class ClusterPDS{
     float time_pds;
     std::vector<float> reco_pes;
 
-    ClusterPDS& operator=(const ClusterPDS& other) {
-      if (this != &other) {
-        time_pds = other.time_pds;
-        reco_pes = other.reco_pes;
-      }
-      return *this;
-    }
-
     bool operator==(const ClusterPDS& other) {
       return (time_pds == other.time_pds &&
           reco_pes == other.reco_pes);
     }
-
-    // ClusterPDS() : time_pds(0), reco_pes(nullptr) {
-    //   reco_pes = new std::vector<float>();
-    // }
-
 
     ClusterPDS(const float& time_pds,
         std::vector<float> reco_pes) {
@@ -235,7 +201,7 @@ public:
     corr_lambda(corr_lambda) {
     this->h2_exp_reco = h2_exp_reco; // Optional, can be nullptr
     this->exp_phs = std::vector<float>(geom.n_opdet, 0.);
-    setptivatemembers();
+    set_privatemembers();
   } // LikelihoodComputer constructor
 
 private:
@@ -263,7 +229,7 @@ private:
   float tpc_min[3] = {0., 0., 0.};
   float tpc_max[3] = {0., 0., 0.};
 
-  void setptivatemembers(){
+  void set_privatemembers(){
     TFile* visibility_file = TFile::Open(visibility_file_name, "READ");
     if (!visibility_file || visibility_file->IsZombie()) {
       std::cerr << "Error opening visibility file: " << visibility_file_name << std::endl;
