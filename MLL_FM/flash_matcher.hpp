@@ -284,14 +284,17 @@ private:
 
     TTree* photoVisMap = (TTree*)visibility_file->Get("photovisAr/photoVisMap");
     const size_t n_entriesmap = photoVisMap->GetEntries();
-    float opDet_visDirect[geom.n_opdet];
-    photoVisMap->SetBranchAddress("opDet_visDirect", &opDet_visDirect);
+    std::vector<float> opDet_visDirect(geom.n_opdet, 0.);
+    photoVisMap->SetBranchAddress("opDet_visDirect", opDet_visDirect.data());
     opDet_visMapDirect.resize(n_entriesmap, std::vector<float>(geom.n_opdet, 0.));
 
     for (size_t VisMapEntry = 0; VisMapEntry < n_entriesmap; ++VisMapEntry) {
       photoVisMap->GetEntry(VisMapEntry);
-      std::memcpy(opDet_visMapDirect[VisMapEntry].data(), &opDet_visDirect[0], geom.n_opdet * sizeof(float));
+      std::copy(opDet_visDirect.begin(), opDet_visDirect.end(), opDet_visMapDirect[VisMapEntry].begin());
     }
+
+    g_par1->Sort(); g_par1->SetBit(TGraph::kIsSortedX);
+    g_par2->Sort(); g_par2->SetBit(TGraph::kIsSortedX);
 
     TGraph* g_he_graph = (TGraph*)he_hit_prob->CreateGraph();
     xprob_max = g_he_graph->GetX()[g_he_graph->GetN()-1];
