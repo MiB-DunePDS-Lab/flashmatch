@@ -5,9 +5,7 @@
 
 # physics.analyzers.solarnuana.SaveSignalDaughters: true
 physics.analyzers.solarnuana.FlashMatchBy: "cheat"
-# physics.analyzers.solarnuana.VisibilityFilename: "/pnfs/dune/scratch/users/fgalizzi/solarnuana_radiological/mll_inputs/dunevis_fdhd_1x2x6_test_float.root" 
 # physics.analyzers.solarnuana.LikelihoodInputDir: "/pnfs/dune/scratch/users/fgalizzi/solarnuana_radiological/mll_inputs/"
-physics.analyzers.solarnuana.VisibilityFilename: "root://fndcadoor.fnal.gov:1094/pnfs/fnal.gov/usr/dune/scratch/users/fgalizzi/solarnuana_radiological/mll_inputs/dunevis_fdhd_1x2x6_test_float.root" 
 physics.analyzers.solarnuana.LikelihoodInputDir: "root://fndcadoor.fnal.gov:1094/pnfs/fnal.gov/usr/dune/scratch/users/fgalizzi/solarnuana_radiological/mll_inputs/"
 physics.analyzers.solarnuana.TrendThreshold: 20.0
 # physics.analyzers.solarnuana.OpFlashAlgoNHit: 3

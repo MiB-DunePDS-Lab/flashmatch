@@ -1,0 +1,50 @@
+# Specific configuration for signal+bkg events with coustom flash generation
+# Run SolarNuAna on the output of a standard reco workflow for DUNE FD
+
+#include "solar_ana_radiological_decay0_dunevd10kt_1x8x14_3view_30deg.fcl"
+
+physics.analyzers.solarnuana.LikelihoodInputDir: "/exp/dune/data/users/fgalizzi/public/LikelihoodInputDir/"
+# physics.analyzers.solarnuana.LikelihoodInputDir: "root://fndcadoor.fnal.gov:1094/pnfs/fnal.gov/usr/dune/scratch/users/fgalizzi/solarnuana_radiological/mll_inputs/" 
+
+physics.analyzers.solarnuana.GenerateAdjOpFlash: true
+physics.analyzers.solarnuana.SaveOpFlashInfo:    true
+physics.analyzers.solarnuana.SaveAdjOpFlashInfo: true
+physics.analyzers.solarnuana.OpFlashAlgoPE: 1.5
+physics.analyzers.solarnuana.OpFlashAlgoTriggerPE: 1.5
+physics.analyzers.solarnuana.AdjOpFlashMembraneProjection: false
+physics.analyzers.solarnuana.AdjOpFlashEndCapProjection: false
+physics.analyzers.solarnuana.FlashMatchBy: "cheat"
+physics.analyzers.solarnuana.AdjOpFlashMinNHitCut: 6
+physics.analyzers.solarnuana.AdjOpFlashX: 100.
+physics.analyzers.solarnuana.AdjOpFlashY: 100.
+physics.analyzers.solarnuana.AdjOpFlashZ: 100.
+
+# My customization
+# Idealizing TPC clusters --------------------------------------------------------
+physics.analyzers.solarnuana.ClusterAlgoTime: 1000000
+physics.analyzers.solarnuana.ClusterAlgoAdjChannel: 10000000
+physics.analyzers.solarnuana.ClusterMatchNHit: 10
+physics.analyzers.solarnuana.ClusterMatchTime: 1000000
+physics.analyzers.solarnuana.ClusterMatchCharge: 1000000
+physics.analyzers.solarnuana.ClusterPreselectionNHits: 0
+physics.analyzers.solarnuana.MinClusterCharge: 0.
+physics.analyzers.solarnuana.AdjClusterRad: 1000000.
+
+
+# Idealizing PDS flashes ---------------------------------------------------------
+physics.analyzers.solarnuana.OpFlashAlgoNHit: 0
+physics.analyzers.solarnuana.OpFlashAlgoMinTime: 1000000
+physics.analyzers.solarnuana.OpFlashAlgoMaxTime: 1000000
+physics.analyzers.solarnuana.OpFlashAlgoRad: 1000000
+physics.analyzers.solarnuana.OpFlashAlgoPE: 1.5
+physics.analyzers.solarnuana.OpFlashAlgoTriggerPE: 1.5
+physics.analyzers.solarnuana.OpFlashAlgoHotVertexThld: 0
+physics.analyzers.solarnuana.AdjOpFlashX: 1000000
+physics.analyzers.solarnuana.AdjOpFlashY: 1000000
+physics.analyzers.solarnuana.AdjOpFlashZ: 1000000
+physics.analyzers.solarnuana.AdjOpFlashMinNHitCut: 0
+physics.analyzers.solarnuana.AdjOpFlashMaxPERatioCut: 1000000
+physics.analyzers.solarnuana.AdjOpFlashMinPECut: 0
+physics.analyzers.solarnuana.AdjOpFlashMaxPECut: 1000000
+physics.analyzers.solarnuana.AdjOpFlashMinPEAttenuate: "flat"
+physics.analyzers.solarnuana.AdjOpFlashMaxPEAttenuate: "flat"
