@@ -55,11 +55,11 @@ void fm_distributions(){
   // --- VISIBILITY STUFF -----------------------------------------------------
   TFile* visibility_file = TFile::Open(visibility_file_name, "READ");
   TH1D* hgrid[3] = {nullptr};
-  hgrid[0] = (TH1D*)visibility_file->Get("photovisAr/hgrid0");
-  hgrid[1] = (TH1D*)visibility_file->Get("photovisAr/hgrid1");
-  hgrid[2] = (TH1D*)visibility_file->Get("photovisAr/hgrid2");
+  hgrid[0] = (TH1D*)visibility_file->Get("hgrid0");
+  hgrid[1] = (TH1D*)visibility_file->Get("hgrid1");
+  hgrid[2] = (TH1D*)visibility_file->Get("hgrid2");
   
-  TTree* tDimensions = (TTree*)visibility_file->Get("photovisAr/tDimensions");
+  TTree* tDimensions = (TTree*)visibility_file->Get("tDimensions");
   Double_t coor_dim[3] = {0.};
   tDimensions->SetBranchAddress("dimension", coor_dim);
   tDimensions->GetEntry(0);
@@ -70,16 +70,8 @@ void fm_distributions(){
   float vol_max[3] = {tpc_max[0]-x_cut, tpc_max[1]-fiducial_cut, tpc_max[2]-fiducial_cut};
   std::vector<int> cryo_to_tpc = GetCryoToTPCMap(hgrid, tpc_min, tpc_max); // Get the mapping from cryostat voxel to TPC voxel
   
-  TTree* photoVisMap = (TTree*)visibility_file->Get("photovisAr/photoVisMap");
-  const size_t n_entriesmap = photoVisMap->GetEntries();
-  float opDet_visDirect[n_opdet];
-  photoVisMap->SetBranchAddress("opDet_visDirect", &opDet_visDirect);
-  std::vector<std::vector<float>> opDet_visMapDirect(n_entriesmap, std::vector<float>(n_opdet, 0.));
-
-  for (size_t VisMapEntry = 0; VisMapEntry < n_entriesmap; ++VisMapEntry) {
-    photoVisMap->GetEntry(VisMapEntry);
-    std::memcpy(opDet_visMapDirect[VisMapEntry].data(), &opDet_visDirect[0], n_opdet * sizeof(float));
-  }
+  std::vector<std::vector<float>> opDet_visMap; // [tpc_index][opdet_index]
+  GetOpDetVisMap(visibility_file, geom, opDet_visMap);
 
 
   // --- PREPARE OUTPUT -------------------------------------------------------
@@ -254,7 +246,7 @@ void fm_distributions(){
 
 
     for(size_t idx_opdet=0; idx_opdet<n_opdet; idx_opdet++){
-      float voxel_vis = opDet_visMapDirect[tpc_index][idx_opdet];// + opDet_visMapReflct[tpc_index][idx_opdet];
+      float voxel_vis = opDet_visMap[tpc_index][idx_opdet];
       if (idx_opdet<geom.opdets_per_plane[0].first or idx_opdet>geom.opdets_per_plane[0].second) {
         voxel_vis = 0.;
       }

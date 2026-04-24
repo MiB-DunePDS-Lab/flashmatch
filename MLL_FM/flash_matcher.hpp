@@ -94,7 +94,7 @@ public:
                            std::vector<float>& noreco_terms,
                            float x_sign = 1.) {
 
-    if (reco_terms.size() >= 0) reco_terms.clear();
+    if (reco_terms.size()   >= 0) reco_terms.clear();
     if (noreco_terms.size() >= 0) noreco_terms.clear();
     
     float dt = tpc_cluster.time_tpc - pds_cluster.time_pds ;
@@ -106,8 +106,6 @@ public:
     vertex_coor[1] = std::max(vertex_coor[1], tpc_min[1]+15); vertex_coor[1] = std::min(vertex_coor[1], tpc_max[1]-15);
     vertex_coor[2] = std::max(vertex_coor[2], tpc_min[2]+15); vertex_coor[2] = std::min(vertex_coor[2], tpc_max[2]-15);
     int tpc_index = GetTPCIndex(vertex_coor, hgrid, cryo_to_tpc);
-
-    float x_min_g_par1s = g_par1->GetX()[0];
 
     float NLL = 0.;
     // std::cout << "yyy" << NLL << std::endl;
@@ -126,7 +124,7 @@ public:
     float weight_sum = 1.;
     // float weight_sum = 1./(std::accumulate(pds_cluster.reco_pes->begin(), pds_cluster.reco_pes->end(), 0.));
     for (size_t idx_opdet=0; idx_opdet<pds_cluster.reco_pes.size(); idx_opdet++){
-      float voxel_vis = opDet_visMapDirect[tpc_index][idx_opdet];// + opDet_visMapReflct[tpc_index][idx_opdet];
+      float voxel_vis = opDet_visMap[tpc_index][idx_opdet];// + opDet_visDirect_ArMapReflct[tpc_index][idx_opdet];
 
       exp_ph = E_reco*LY_times_PDE*voxel_vis;
       exp_phs[idx_opdet] = exp_ph;
@@ -134,8 +132,8 @@ public:
       float P_hit_mu = (exp_ph<xprob_max) ? g_he->Eval(exp_ph) : 1.; // Avoid weird extrapolation where we
       //                                                             // have no points in the efficiency graph,
       //                                                             // and just assume that the hit probability is 1 for very high expected PE.
-      if (P_hit_mu <= 0.) P_hit_mu = 1.e-4;
-      if (P_hit_mu >= 1.) P_hit_mu = 1. - 1.e-4;
+      if (P_hit_mu <= 0.) P_hit_mu = 1.e-6;
+      if (P_hit_mu >= 1.) P_hit_mu = 1. - 1.e-6;
 
       reco_pe = pds_cluster.reco_pes.at(idx_opdet);
 
@@ -210,7 +208,7 @@ private:
   DuneGeom geom;
   float drift_velocity;
   float LY_times_PDE;
-  std::vector<std::vector<float>> opDet_visMapDirect;
+  std::vector<std::vector<float>> opDet_visMap;
   TEfficiency* he_hit_prob;
   TF1* f_RecoExpDistr;
   TF1* f_par1_trend;
@@ -235,11 +233,11 @@ private:
       std::cerr << "Error opening visibility file: " << visibility_file_name << std::endl;
       return;
     }
-    hgrid[0] = (TH1D*)visibility_file->Get("photovisAr/hgrid0")->Clone("hclone_hgrid0");
-    hgrid[1] = (TH1D*)visibility_file->Get("photovisAr/hgrid1")->Clone("hclone_hgrid1");
-    hgrid[2] = (TH1D*)visibility_file->Get("photovisAr/hgrid2")->Clone("hclone_hgrid2");
+    hgrid[0] = (TH1D*)visibility_file->Get("hgrid0")->Clone("hclone_hgrid0");
+    hgrid[1] = (TH1D*)visibility_file->Get("hgrid1")->Clone("hclone_hgrid1");
+    hgrid[2] = (TH1D*)visibility_file->Get("hgrid2")->Clone("hclone_hgrid2");
 
-    TTree* tDimensions = (TTree*)visibility_file->Get("photovisAr/tDimensions");
+    TTree* tDimensions = (TTree*)visibility_file->Get("tDimensions");
     Double_t coor_dim[3] = {0.};
     tDimensions->SetBranchAddress("dimension", coor_dim);
     tDimensions->GetEntry(0);
@@ -248,16 +246,7 @@ private:
     tpc_max[0] = float(coor_dim[0]); tpc_max[1] = float(coor_dim[1]); tpc_max[2] = float(coor_dim[2]); // x,y,z
     cryo_to_tpc = GetCryoToTPCMap(hgrid, tpc_min, tpc_max);
 
-    TTree* photoVisMap = (TTree*)visibility_file->Get("photovisAr/photoVisMap");
-    const size_t n_entriesmap = photoVisMap->GetEntries();
-    std::vector<float> opDet_visDirect(geom.n_opdet, 0.);
-    photoVisMap->SetBranchAddress("opDet_visDirect", opDet_visDirect.data());
-    opDet_visMapDirect.resize(n_entriesmap, std::vector<float>(geom.n_opdet, 0.));
-
-    for (size_t VisMapEntry = 0; VisMapEntry < n_entriesmap; ++VisMapEntry) {
-      photoVisMap->GetEntry(VisMapEntry);
-      std::copy(opDet_visDirect.begin(), opDet_visDirect.end(), opDet_visMapDirect[VisMapEntry].begin());
-    }
+    GetOpDetVisMap(visibility_file, geom, opDet_visMap);
 
     g_par1->Sort(); g_par1->SetBit(TGraph::kIsSortedX);
     g_par2->Sort(); g_par2->SetBit(TGraph::kIsSortedX);
