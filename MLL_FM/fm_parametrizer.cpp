@@ -57,7 +57,7 @@ void fm_parametrizer(){
   out_file->cd("projections");
   
   for(int idx_y=1; idx_y<=h2_exp_reco->GetNbinsY(); idx_y++){
-      double exp_ph = h2_exp_reco->GetYaxis()->GetBinCenter(idx_y);
+    double exp_ph = h2_exp_reco->GetYaxis()->GetBinCenter(idx_y);
     std::cout << idx_y << "/" << h2_exp_reco->GetNbinsY() << "\r" << std::flush;
     TH1D* h1_proj = h2_exp_reco->ProjectionX("h1_proj", idx_y, idx_y, "e");
     double h1_proj_integral = h1_proj->Integral();

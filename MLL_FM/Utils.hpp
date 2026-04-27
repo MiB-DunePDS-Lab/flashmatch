@@ -2,6 +2,7 @@
 #define UTILS_HPP
 
 // GENERAL
+#include "TFile.h"
 #include <cstddef>
 #include <vector>
 #include <iostream>
@@ -213,8 +214,11 @@ inline double log_logistic_dist(double* x, double* par){
 }
 
 struct DuneGeom{
+  std::string geom_identifier;
   size_t n_opdet;
   float anode_x;
+  bool reflected_light;
+  bool xe_light;
   std::map<int, std::pair<size_t, size_t>> opdets_per_plane; // plane -> (start_opdet, end_opdet)
 };
 
@@ -227,8 +231,11 @@ inline DuneGeom load_dune_geom(const std::string& filename){
   json j;
   file >> j;
   DuneGeom geom;
-  geom.n_opdet = j.at("n_opdet").get<size_t>();
-  geom.anode_x = j.at("anode_x").get<float>();
+  geom.geom_identifier = j.at("geom_identifier").get<std::string>();
+  geom.n_opdet         = j.at("n_opdet").get<size_t>();
+  geom.anode_x         = j.at("anode_x").get<float>();
+  geom.reflected_light = j.at("reflected_light").get<bool>();
+  geom.xe_light        = j.at("xe_light").get<bool>();
   for (const auto& plane_entry : j.at("opdets_per_plane").items()) {
     int plane = std::stoi(plane_entry.key());
     size_t start_opdet = plane_entry.value().at(0).get<size_t>();
@@ -253,6 +260,8 @@ struct MLLConfigs{
   float x_fiducial_cut;
   // bool verbose;
   float q_cut_high;  
+  size_t n_combinations;
+  bool loop_on_tpc_clusters;
 };
 
 inline MLLConfigs load_ana_config(const std::string &filename){
@@ -277,6 +286,8 @@ inline MLLConfigs load_ana_config(const std::string &filename){
   config.x_fiducial_cut       = j.at("x_fiducial_cut").get<float>();
   // config.verbose              = j.at("verbose").get<bool>();
   config.q_cut_high           = j.at("q_cut_high").get<float>();
+  config.n_combinations       = j.at("n_combinations").get<size_t>();
+  config.loop_on_tpc_clusters = j.at("loop_on_tpc_clusters").get<bool>();
   return config;
 }
 
@@ -309,6 +320,33 @@ inline SampleConfigs load_sample_config(const std::string &filename){
   config.q_cut_low         = j.at("q_cut_low").get<double>();
   config.apply_cut         = j.at("apply_cut").get<bool>();
   return config;
+}
+
+inline void GetOpDetVisMap(TFile* visibility_file,
+                    DuneGeom& geom,
+                    std::vector<std::vector<float>>& opDet_visMap){
+  TTree* photoVisMap = (TTree*)visibility_file->Get("photoVisMap");
+  const size_t n_entriesmap = photoVisMap->GetEntries();
+  std::vector<float> opDet_visDirect_Ar(geom.n_opdet, 0.);
+  std::vector<float> opDet_visDirect_Xe(geom.n_opdet, 0.);
+  std::vector<float> opDet_visReflct_Ar(geom.n_opdet, 0.);
+  std::vector<float> opDet_visReflct_Xe(geom.n_opdet, 0.);
+  photoVisMap->SetBranchAddress("opDet_visDirect_Ar", opDet_visDirect_Ar.data());
+  if (geom.reflected_light) photoVisMap->SetBranchAddress("opDet_visReflct_Ar", opDet_visReflct_Ar.data());
+  if (geom.xe_light) {
+    photoVisMap->SetBranchAddress("opDet_visDirect_Xe", opDet_visDirect_Xe.data());
+    if (geom.reflected_light) photoVisMap->SetBranchAddress("opDet_visReflct_Xe", opDet_visReflct_Xe.data());
+  }
+  opDet_visMap.resize(n_entriesmap, std::vector<float>(geom.n_opdet, 0.));
+
+  for (size_t VisMapEntry = 0; VisMapEntry < n_entriesmap; ++VisMapEntry) {
+    photoVisMap->GetEntry(VisMapEntry);
+    for (size_t opDet = 0; opDet < geom.n_opdet; ++opDet) {  
+      opDet_visMap[VisMapEntry][opDet] = opDet_visDirect_Ar[opDet]+opDet_visReflct_Ar[opDet]+opDet_visDirect_Xe[opDet]+opDet_visReflct_Xe[opDet];
+    }
+  }
+  
+  return;
 }
 
 #endif // UTILS_HPP

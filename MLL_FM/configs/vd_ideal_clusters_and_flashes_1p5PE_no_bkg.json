@@ -1,0 +1,10 @@
+{
+  "input_dir":  "/Users/federico/PhD/LowEnergy/flashmatch/data/vd_testing_MLL_FM/ideal_clusters_and_flashes_1p5PE_no_bkg/",
+  "geom_identifier": "dunevd10kt",
+  "distribution": "lognormal",
+  "fit_trend_low": 50,
+  "fit_trend_up": 170,
+  "trend_thr": 100,
+  "q_cut_low": 150.0,
+  "apply_cut" :true
+}
