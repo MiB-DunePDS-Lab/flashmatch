@@ -1,5 +1,5 @@
 {
-  "input_dir":  "../data/testing_cheating_FM/no_bkg/",
+  "input_dir":  "/Users/federico/PhD/LowEnergy/flashmatch/data/testing_cheating_FM/ideal_clusters_and_flashes_1p5PE_no_bkg/",
   "geom_identifier": "dune10kt",
   "distribution": "lognormal",
   "fit_trend_low": 20,

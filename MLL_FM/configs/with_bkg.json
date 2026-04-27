@@ -1,10 +1,10 @@
 {
-  "input_dir":  "../data/testing_cheating_FM/no_bkg/",
+  "input_dir":  "/Users/federico/PhD/LowEnergy/flashmatch/data/testing_MLL_FM/",
   "geom_identifier": "dune10kt",
   "distribution": "lognormal",
   "fit_trend_low": 20,
-  "fit_trend_up": 70,
-  "trend_thr": 60,
+  "fit_trend_up": 100,
+  "trend_thr": 28,
   "q_cut_low": 150.0,
   "apply_cut" :true
 }

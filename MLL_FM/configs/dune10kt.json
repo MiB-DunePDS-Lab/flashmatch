@@ -1,0 +1,10 @@
+{
+  "geom_identifier": "dune10kt",
+  "n_opdet": 480,
+  "anode_x": 0,
+  "reflected_light": true,
+  "xe_light": false,
+  "opdets_per_plane": {
+    "0": [0, 480]
+  }
+}

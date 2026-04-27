@@ -219,10 +219,10 @@ void fm_Offline(){
       float flash_residual = MAdjFlashResidual.At(idx_flash);
       float flash_pe = MAdjFlashPE.At(idx_flash);
       float flash_nhits = MAdjFlashNHits.At(idx_flash);
-      ClusterPDS pds_cluster = ClusterPDS(flash_time, &reco_pes);
-      float x_sign = (*TPC % 2 == 0) ? -1. : 1.;
+      ClusterPDS pds_cluster = ClusterPDS(flash_time, reco_pes);
+      float x_sign = (geom_identifier == "dune10kt" && (*TPC % 2 == 0)) ? -1. : 1.;
     
-      float offline_likelihood = -likelihood_computer.GetLikelihoodMatch(tpc_cluster, pds_cluster, reco_terms, noreco_terms, x_sign);
+      float offline_likelihood = likelihood_computer.GetLikelihoodMatch(tpc_cluster, pds_cluster, reco_terms, noreco_terms, x_sign);
       // offline_likelihood *= flash_fast; // Scale the likelihood by the flash fast component
 
       if (MAdjFlashPE.At(idx_flash) == *MatchedOpFlashPE && MAdjFlashTime.At(idx_flash) == *MatchedOpFlashTime){

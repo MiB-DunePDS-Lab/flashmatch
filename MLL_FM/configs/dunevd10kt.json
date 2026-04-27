@@ -1,0 +1,10 @@
+{
+  "geom_identifier": "dunevd10kt",
+  "n_opdet": 184,
+  "anode_x": 325.04,
+  "reflected_light": false,
+  "xe_light": true,
+  "opdets_per_plane": {
+    "0": [72, 184]
+  }
+}
