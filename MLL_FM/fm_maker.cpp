@@ -28,6 +28,10 @@ struct Row{
   int n_close_flashes = 0;
   float close_totalpe = 0;
   int close_nhits = 0;
+ 
+  int n_near_flashes = 0;
+  float near_totalpe = 0;
+  int near_nhits = 0;
 
 
   // Matching
@@ -37,7 +41,9 @@ struct Row{
   float purity;
 };
 
-float time_window = 20;
+float time_window = 0.2;
+float large_window_low = 0.5;
+float large_window_up = 4.0;
 
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
@@ -176,6 +182,9 @@ void fm_maker(){
   feature_tree->Branch("close_totalpe", &r.close_totalpe, "close_totalpe/F");
   feature_tree->Branch("close_nhits", &r.close_nhits, "close_nhits/I");
   feature_tree->Branch("close_nhits_exp_ratio", &r.close_nhits_exp_ratio, "close_nhits_exp_ratio/F");
+  feature_tree->Branch("n_near_flashes", &r.n_near_flashes, "n_near_flashes/I");
+  feature_tree->Branch("near_totalpe", &r.near_totalpe, "near_totalpe/F");
+  feature_tree->Branch("near_nhits", &r.near_nhits, "near_nhits/I");
   feature_tree->Branch("time_pds", &r.time_pds, "time_pds/F");
   feature_tree->Branch("time_diff", &r.time_diff, "time_diff/F");
   feature_tree->Branch("flash_cluster_dist", &r.flash_cluster_dist, "flash_cluster_dist/F");
@@ -249,13 +258,22 @@ void fm_maker(){
       r.n_close_flashes = 0;
       r.close_totalpe = 0;
       r.close_nhits = 0;
+      r.n_near_flashes = 0;
+      r.near_totalpe = 0;
+      r.near_nhits = 0;
       for (size_t ii = 0; ii < AdjOpFlashTime.GetSize(); ii++){
-        float dt = std::abs(*MatchedOpFlashTime - AdjOpFlashTime.At(ii));
-        if (dt < r.dt_nearest_flash) r.dt_nearest_flash = dt;
-        if (dt < time_window){
+        float dt = *MatchedOpFlashTime - AdjOpFlashTime.At(ii);
+        if (std::abs(dt) < r.dt_nearest_flash) r.dt_nearest_flash = dt;
+        if (std::abs(dt) < time_window){
           r.n_close_flashes++;
           r.close_totalpe += AdjOpFlashPE.At(ii);
           r.close_nhits += AdjOpFlashNHits.At(ii);
+        }
+        // if (AdjOpflashTime.At(ii) > *MatchedOpFlashTime - large_window_low && AdjOpFlashTime.At(ii) < *MatchedOpFlashTime + large_window_up){
+        if (large_window_low > dt && -large_window_up < dt){
+          r.n_near_flashes++;
+          r.near_totalpe += AdjOpFlashPE.At(ii);
+          r.near_nhits += AdjOpFlashNHits.At(ii);
         }
       }
       r.close_nhits_exp_ratio = r.close_nhits / (r.nhit_expected+1.e-6);
@@ -304,12 +322,17 @@ void fm_maker(){
       r.close_totalpe = 0;
       r.close_nhits = 0;
       for (size_t ii = 0; ii < AdjOpFlashTime.GetSize(); ii++){
-        float dt = std::abs(*MatchedOpFlashTime - AdjOpFlashTime.At(ii));
-        if (dt < r.dt_nearest_flash) r.dt_nearest_flash = dt;
-        if (dt < time_window){
+        float dt = *MatchedOpFlashTime - AdjOpFlashTime.At(ii);
+        if (std::abs(dt) < r.dt_nearest_flash) r.dt_nearest_flash = dt;
+        if (std::abs(dt) < time_window){
           r.n_close_flashes++;
           r.close_totalpe += AdjOpFlashPE.At(ii);
           r.close_nhits += AdjOpFlashNHits.At(ii);
+        }
+        if (large_window_low > dt && -large_window_up < dt){
+          r.n_near_flashes++;
+          r.near_totalpe += AdjOpFlashPE.At(ii);
+          r.near_nhits += AdjOpFlashNHits.At(ii);
         }
       }
       r.close_nhits_exp_ratio = r.close_nhits / (r.nhit_expected+1.e-6);

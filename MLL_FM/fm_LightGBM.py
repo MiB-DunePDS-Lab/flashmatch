@@ -107,10 +107,14 @@ if __name__ == "__main__":
         "close_totalpe_rank",
         "exp_close_totalpe_ratio",
         "nhits_expnhits_ratio",
+        "n_close_flashes",
         "close_nhits",
         "close_nhits_rank",
         "close_nhits_exp_ratio",
-        "dt_nearest_flash", "n_close_flashes"
+        "dt_nearest_flash",
+        "n_near_flashes",
+        "near_totalpe",
+        "near_nhits"
     ]
 
 
