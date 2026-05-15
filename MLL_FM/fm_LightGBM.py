@@ -10,9 +10,9 @@ import json
 import ROOT
 
 train_fraction = 0.8
-num_boost_round = 1000
+num_boost_round = 2000
 early_stopping_rounds = 50
-num_leaves = 8
+num_leaves = 15
 learning_rate = 0.05
 min_data_in_leaf = 400
 feature_fraction = 0.8
@@ -91,30 +91,34 @@ if __name__ == "__main__":
     features = [
         "nll",
         "nll_weighted",
-        "charge", "max_charge", "charge_nhits", "y_reco", "z_reco",
-        "total_pe", "max_pe", "nhits", "flash_reco_y", "flash_reco_z",
-        "e_reco",
-        "time_diff",
-        "flash_cluster_dist",
         "reco_term_mean", "reco_term_std", "reco_term_max", "reco_term_min",
         "noreco_term_mean", "noreco_term_std", "noreco_term_max", "noreco_term_min",
         "exp_ph_sum", "nhit_expected",
-        "nll_rank",
-        "total_pe_rank",
+        "time_diff",
         "exp_reco_ratio",
-        "totalpe_nhits_ratio",
-        "close_totalpe",
-        "close_totalpe_rank",
-        "exp_close_totalpe_ratio",
         "nhits_expnhits_ratio",
-        "n_close_flashes",
-        "close_nhits",
-        "close_nhits_rank",
+        "exp_close_totalpe_ratio",
         "close_nhits_exp_ratio",
+        "exp_near_totalpe_ratio",
+        "charge", "max_charge",
+        "y_reco", "z_reco",
+        "charge_nhits",
+        "total_pe", "max_pe",
+        "totalpe_nhits_ratio",
+        "nhits", "flash_reco_y", "flash_reco_z",
+        "n_close_flashes",
+        "close_totalpe",
+        "close_nhits",
         "dt_nearest_flash",
         "n_near_flashes",
         "near_totalpe",
-        "near_nhits"
+        "near_nhits",
+        "e_reco",
+        "flash_cluster_dist",
+        "nll_rank",
+        "total_pe_rank",
+        "close_totalpe_rank",
+        "close_nhits_rank",
     ]
 
 
@@ -309,11 +313,11 @@ if __name__ == "__main__":
     for event_id, group in df.groupby("event_id"):
         best_max_pe = group.loc[group["total_pe"].idxmax()]
         best_max_nll_weighted = group.loc[group["nll_weighted"].idxmin()]
-        best_cheat = group.loc[group["flash_id"].idxmin()]
+        best_cheat = group.loc[group["purity"].idxmax()]
 
         catch_max_pe = 1 if int(best_max_pe["my_label"]) > 0 else 0
         catch_max_nll_weighted = 1 if int(best_max_nll_weighted["my_label"]) > 0 else 0
-        catch_cheat = 1 if best_cheat["flash_id"] == -1 else 0
+        catch_cheat = 1 if best_cheat["purity"] > 0 else 0
 
         # catch_max_pe = 1 if best_max_pe["purity"] > 0. else 0
         # catch_max_nll_weighted = 1 if best_max_nll_weighted["purity"] > 0. else 0

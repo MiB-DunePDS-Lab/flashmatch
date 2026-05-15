@@ -6,34 +6,34 @@
 
 struct Row{
   // Event
-  int event_id, cluster_id, flash_id, group_id, label;
+  int event_id, label;
   // MLL
   float nll, nll_weighted;
   float reco_term_mean, reco_term_std, reco_term_max, reco_term_min;
   float noreco_term_mean, noreco_term_std, noreco_term_max, noreco_term_min;
   float exp_ph_sum, nhit_expected;
   float time_diff;
+  float exp_reco_ratio;
+  float nhits_expnhits_ratio;
+  float exp_close_totalpe_ratio;
+  float close_nhits_exp_ratio;
+  float exp_near_totalpe_ratio;
+  float near_nhits_exp_ratio;
   // TPC
-  float charge, max_charge, time_tpc, y_reco, z_reco;
+  float charge, max_charge, y_reco, z_reco;
   int charge_nhits;
   // PDS
-  float total_pe, max_pe, time_pds;
+  float total_pe, max_pe;
+  float totalpe_nhits_ratio;
   int nhits;
   float flash_reco_y, flash_reco_z;
-
-  // Adding ..............
-  float exp_reco_ratio, totalpe_nhits_ratio, exp_close_totalpe_ratio;
-  float nhits_expnhits_ratio, close_nhits_exp_ratio;
-  float dt_nearest_flash = 1e9;
   int n_close_flashes = 0;
   float close_totalpe = 0;
   int close_nhits = 0;
- 
+  float dt_nearest_flash = 1e9;
   int n_near_flashes = 0;
   float near_totalpe = 0;
   int near_nhits = 0;
-
-
   // Matching
   float e_reco, flash_cluster_dist;
   // True
@@ -41,7 +41,7 @@ struct Row{
   float purity;
 };
 
-float time_window = 0.2;
+float time_window = 2.;
 float large_window_low = 0.5;
 float large_window_up = 4.0;
 
@@ -156,44 +156,9 @@ void fm_maker(){
 
   Row r;
   feature_tree->Branch("event_id", &r.event_id, "event_id/I");
-  // feature_tree->Branch("cluster_id", &r.cluster_id, "cluster_id/I");
-  feature_tree->Branch("flash_id", &r.flash_id, "flash_id/I");
-  // feature_tree->Branch("group_id", &r.group_id, "group_id/I");
   feature_tree->Branch("my_label", &r.label, "my_label/I");
   feature_tree->Branch("nll", &r.nll, "nll/F");
   feature_tree->Branch("nll_weighted", &r.nll_weighted, "nll_weighted/F");
-  feature_tree->Branch("charge", &r.charge, "charge/F");
-  feature_tree->Branch("max_charge", &r.max_charge, "max_charge/F");
-  feature_tree->Branch("charge_nhits", &r.charge_nhits, "charge_nhits/F");
-  feature_tree->Branch("y_reco", &r.y_reco, "y_reco/F");
-  feature_tree->Branch("z_reco", &r.z_reco, "z_reco/F");
-  feature_tree->Branch("time_tpc", &r.time_tpc, "time_tpc/F");
-  feature_tree->Branch("total_pe", &r.total_pe, "total_pe/F");
-  feature_tree->Branch("max_pe", &r.max_pe, "max_pe/F");
-  feature_tree->Branch("nhits", &r.nhits, "nhits/I");
-  feature_tree->Branch("flash_reco_y", &r.flash_reco_y, "flash_reco_y/F");
-  feature_tree->Branch("flash_reco_z", &r.flash_reco_z, "flash_reco_z/F");
-  feature_tree->Branch("exp_reco_ratio", &r.exp_reco_ratio, "exp_reco_ratio/F");
-  feature_tree->Branch("totalpe_nhits_ratio", &r.totalpe_nhits_ratio, "totalpe_nhits_ratio/F");
-  feature_tree->Branch("exp_close_totalpe_ratio", &r.exp_close_totalpe_ratio, "exp_close_totalpe_ratio/F");
-  feature_tree->Branch("nhits_expnhits_ratio", &r.nhits_expnhits_ratio, "nhits_expnhits_ratio/F");
-  feature_tree->Branch("dt_nearest_flash", &r.dt_nearest_flash, "dt_nearest_flash/F");
-  feature_tree->Branch("n_close_flashes", &r.n_close_flashes, "n_close_flashes/I");
-  feature_tree->Branch("close_totalpe", &r.close_totalpe, "close_totalpe/F");
-  feature_tree->Branch("close_nhits", &r.close_nhits, "close_nhits/I");
-  feature_tree->Branch("close_nhits_exp_ratio", &r.close_nhits_exp_ratio, "close_nhits_exp_ratio/F");
-  feature_tree->Branch("n_near_flashes", &r.n_near_flashes, "n_near_flashes/I");
-  feature_tree->Branch("near_totalpe", &r.near_totalpe, "near_totalpe/F");
-  feature_tree->Branch("near_nhits", &r.near_nhits, "near_nhits/I");
-  feature_tree->Branch("time_pds", &r.time_pds, "time_pds/F");
-  feature_tree->Branch("time_diff", &r.time_diff, "time_diff/F");
-  feature_tree->Branch("flash_cluster_dist", &r.flash_cluster_dist, "flash_cluster_dist/F");
-  feature_tree->Branch("e_reco", &r.e_reco, "e_reco/F");
-  feature_tree->Branch("x_true", &r.x_true, "x_true/F");
-  feature_tree->Branch("y_true", &r.y_true, "y_true/F");
-  feature_tree->Branch("z_true", &r.z_true, "z_true/F");
-  feature_tree->Branch("e_true", &r.e_true, "e_true/F");
-  feature_tree->Branch("purity", &r.purity, "purity/F");
   feature_tree->Branch("reco_term_mean", &r.reco_term_mean, "reco_term_mean/F");
   feature_tree->Branch("reco_term_std", &r.reco_term_std, "reco_term_std/F");
   feature_tree->Branch("reco_term_max", &r.reco_term_max, "reco_term_max/F");
@@ -204,6 +169,38 @@ void fm_maker(){
   feature_tree->Branch("noreco_term_min", &r.noreco_term_min, "noreco_term_min/F");
   feature_tree->Branch("exp_ph_sum", &r.exp_ph_sum, "exp_ph_sum/F");
   feature_tree->Branch("nhit_expected", &r.nhit_expected, "nhit_expected/F");
+  feature_tree->Branch("time_diff", &r.time_diff, "time_diff/F");
+  feature_tree->Branch("exp_reco_ratio", &r.exp_reco_ratio, "exp_reco_ratio/F");
+  feature_tree->Branch("nhits_expnhits_ratio", &r.nhits_expnhits_ratio, "nhits_expnhits_ratio/F");
+  feature_tree->Branch("exp_close_totalpe_ratio", &r.exp_close_totalpe_ratio, "exp_close_totalpe_ratio/F");
+  feature_tree->Branch("close_nhits_exp_ratio", &r.close_nhits_exp_ratio, "close_nhits_exp_ratio/F");
+  feature_tree->Branch("exp_near_totalpe_ratio", &r.exp_near_totalpe_ratio, "exp_near_totalpe_ratio/F");
+  feature_tree->Branch("near_nhits_exp_ratio", &r.near_nhits_exp_ratio, "near_nhits_exp_ratio/F");
+  feature_tree->Branch("charge", &r.charge, "charge/F");
+  feature_tree->Branch("max_charge", &r.max_charge, "max_charge/F");
+  feature_tree->Branch("y_reco", &r.y_reco, "y_reco/F");
+  feature_tree->Branch("z_reco", &r.z_reco, "z_reco/F");
+  feature_tree->Branch("charge_nhits", &r.charge_nhits, "charge_nhits/F");
+  feature_tree->Branch("total_pe", &r.total_pe, "total_pe/F");
+  feature_tree->Branch("max_pe", &r.max_pe, "max_pe/F");
+  feature_tree->Branch("totalpe_nhits_ratio", &r.totalpe_nhits_ratio, "totalpe_nhits_ratio/F");
+  feature_tree->Branch("nhits", &r.nhits, "nhits/I");
+  feature_tree->Branch("flash_reco_y", &r.flash_reco_y, "flash_reco_y/F");
+  feature_tree->Branch("flash_reco_z", &r.flash_reco_z, "flash_reco_z/F");
+  feature_tree->Branch("n_close_flashes", &r.n_close_flashes, "n_close_flashes/I");
+  feature_tree->Branch("close_totalpe", &r.close_totalpe, "close_totalpe/F");
+  feature_tree->Branch("close_nhits", &r.close_nhits, "close_nhits/I");
+  feature_tree->Branch("dt_nearest_flash", &r.dt_nearest_flash, "dt_nearest_flash/F");
+  feature_tree->Branch("n_near_flashes", &r.n_near_flashes, "n_near_flashes/I");
+  feature_tree->Branch("near_totalpe", &r.near_totalpe, "near_totalpe/F");
+  feature_tree->Branch("near_nhits", &r.near_nhits, "near_nhits/I");
+  feature_tree->Branch("e_reco", &r.e_reco, "e_reco/F");
+  feature_tree->Branch("flash_cluster_dist", &r.flash_cluster_dist, "flash_cluster_dist/F");
+  feature_tree->Branch("x_true", &r.x_true, "x_true/F");
+  feature_tree->Branch("y_true", &r.y_true, "y_true/F");
+  feature_tree->Branch("z_true", &r.z_true, "z_true/F");
+  feature_tree->Branch("e_true", &r.e_true, "e_true/F");
+  feature_tree->Branch("purity", &r.purity, "purity/F");
 
 
   r.event_id = 0;
@@ -214,7 +211,6 @@ void fm_maker(){
     r.charge = *Charge;
     r.max_charge = *MaxCharge;
     r.charge_nhits = *ChargeNHits;
-    r.time_tpc = *Time;
     r.y_reco = *RecoY;
     r.z_reco = *RecoZ;
     r.x_true = *x_true;
@@ -222,73 +218,13 @@ void fm_maker(){
     r.z_true = *z_true;
     r.e_true = *e_true;
 
-    if (*MatchedOpFlashCorrectly){
-      std::vector<float> pe_per_opdet(MatchedOpFlashPEperOpDet.begin(), MatchedOpFlashPEperOpDet.end());
-      ClusterPDS flash   = ClusterPDS(*MatchedOpFlashTime, pe_per_opdet);
-      r.flash_id = -1;
-      r.nll = likelihood_computer.GetLikelihoodMatch(cluster, flash, dummy_vec, dummy_vec2, 1.);
-      r.nhits = *MatchedOpFlashNHits;
-      r.purity = *MatchedOpFlashPur;
-      r.flash_reco_y = *MatchedOpFlashRecoY;
-      r.flash_reco_z = *MatchedOpFlashRecoZ;
-      r.flash_cluster_dist = *MatchedOpFlashR;
-      r.nll_weighted = r.nll / (r.nhits * r.nhits);
-      r.total_pe = *MatchedOpFlashPE;
-      r.max_pe = *MatchedOpFlashMaxPE;
-      r.time_pds = *MatchedOpFlashTime;
-      r.e_reco = likelihood_computer.E_reco;
-      r.label = 2;
-      r.reco_term_mean = likelihood_computer.reco_term_mean;
-      r.reco_term_std = likelihood_computer.reco_term_std;
-      r.reco_term_max = likelihood_computer.reco_term_max;
-      r.reco_term_min = likelihood_computer.reco_term_min;
-      r.noreco_term_mean = likelihood_computer.noreco_term_mean;
-      r.noreco_term_std = likelihood_computer.noreco_term_std;
-      r.noreco_term_max = likelihood_computer.noreco_term_max;
-      r.noreco_term_min = likelihood_computer.noreco_term_min;
-      r.exp_ph_sum = likelihood_computer.exp_ph_sum;
-      r.nhit_expected = likelihood_computer.nhit_expected;
-
-      r.exp_reco_ratio = r.exp_ph_sum / (r.total_pe+1.e-6);
-      r.totalpe_nhits_ratio = r.total_pe / (r.charge_nhits+1.e-6);
-      r.nhits_expnhits_ratio = r.nhits / (r.nhit_expected+1.e-6);
-      r.time_diff = *Time - *MatchedOpFlashTime;
-      
-      r.dt_nearest_flash = 1e9;
-      r.n_close_flashes = 0;
-      r.close_totalpe = 0;
-      r.close_nhits = 0;
-      r.n_near_flashes = 0;
-      r.near_totalpe = 0;
-      r.near_nhits = 0;
-      for (size_t ii = 0; ii < AdjOpFlashTime.GetSize(); ii++){
-        float dt = *MatchedOpFlashTime - AdjOpFlashTime.At(ii);
-        if (std::abs(dt) < r.dt_nearest_flash) r.dt_nearest_flash = dt;
-        if (std::abs(dt) < time_window){
-          r.n_close_flashes++;
-          r.close_totalpe += AdjOpFlashPE.At(ii);
-          r.close_nhits += AdjOpFlashNHits.At(ii);
-        }
-        // if (AdjOpflashTime.At(ii) > *MatchedOpFlashTime - large_window_low && AdjOpFlashTime.At(ii) < *MatchedOpFlashTime + large_window_up){
-        if (large_window_low > dt && -large_window_up < dt){
-          r.n_near_flashes++;
-          r.near_totalpe += AdjOpFlashPE.At(ii);
-          r.near_nhits += AdjOpFlashNHits.At(ii);
-        }
-      }
-      r.close_nhits_exp_ratio = r.close_nhits / (r.nhit_expected+1.e-6);
-      
-      feature_tree->Fill();
+    if (AdjOpFlashTime.GetSize() == 0) {
+      continue; // Skip if there are no adjacent flashes
     }
     
     for (size_t idx_flash = 0; idx_flash < AdjOpFlashTime.GetSize(); idx_flash++){
-      if (AdjOpFlashPE.At(idx_flash) == *MatchedOpFlashPE && AdjOpFlashTime.At(idx_flash) == *MatchedOpFlashTime){
-        continue; // Skip the correctly matched flash since it's already processed
-      }
-
       std::vector<float> pe_per_opdet(AdjOpFlashPEperOpDet.begin() + idx_flash*geom.n_opdet, AdjOpFlashPEperOpDet.begin() + (idx_flash+1)*geom.n_opdet);
       ClusterPDS flash   = ClusterPDS(AdjOpFlashTime.At(idx_flash), pe_per_opdet);
-      r.flash_id = idx_flash;
       r.nll = likelihood_computer.GetLikelihoodMatch(cluster, flash, dummy_vec, dummy_vec2, 1.);
       r.nhits = AdjOpFlashNHits[idx_flash];
       r.purity = AdjOpFlashY[idx_flash];
@@ -298,9 +234,11 @@ void fm_maker(){
       r.nll_weighted = r.nll / (r.nhits * r.nhits);
       r.total_pe = AdjOpFlashPE[idx_flash];
       r.max_pe = AdjOpFlashMaxPE[idx_flash];
-      r.time_pds = AdjOpFlashTime[idx_flash];
       r.e_reco = likelihood_computer.E_reco;
-      r.label = AdjOpFlashPur[idx_flash] > 0. ? 1 : 0;
+      if (AdjOpFlashPE.At(idx_flash) == *MatchedOpFlashPE && AdjOpFlashTime.At(idx_flash) == *MatchedOpFlashTime)
+        r.label = 2; // Correctly matched flash
+      else
+        r.label = AdjOpFlashPur[idx_flash] > 0. ? 1 : 0;
       r.reco_term_mean = likelihood_computer.reco_term_mean;
       r.reco_term_std = likelihood_computer.reco_term_std;
       r.reco_term_max = likelihood_computer.reco_term_max;
@@ -321,8 +259,12 @@ void fm_maker(){
       r.n_close_flashes = 0;
       r.close_totalpe = 0;
       r.close_nhits = 0;
+      r.n_near_flashes = 0;
+      r.near_totalpe = 0;
+      r.near_nhits = 0;
       for (size_t ii = 0; ii < AdjOpFlashTime.GetSize(); ii++){
-        float dt = *MatchedOpFlashTime - AdjOpFlashTime.At(ii);
+        if (ii == idx_flash) continue; // Skip the same flash
+        float dt = AdjOpFlashTime.At(idx_flash) - AdjOpFlashTime.At(ii);
         if (std::abs(dt) < r.dt_nearest_flash) r.dt_nearest_flash = dt;
         if (std::abs(dt) < time_window){
           r.n_close_flashes++;
@@ -336,6 +278,9 @@ void fm_maker(){
         }
       }
       r.close_nhits_exp_ratio = r.close_nhits / (r.nhit_expected+1.e-6);
+      r.exp_close_totalpe_ratio = r.close_totalpe / (r.exp_ph_sum+1.e-6);
+      r.exp_near_totalpe_ratio = r.near_totalpe / (r.exp_ph_sum+1.e-6);
+      r.near_nhits_exp_ratio = r.near_nhits / (r.nhit_expected+1.e-6);
 
       feature_tree->Fill();
     } // loop over flashes
