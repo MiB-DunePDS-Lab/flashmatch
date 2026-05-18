@@ -1,0 +1,10 @@
+{
+  "input_dir":  "/Users/federico/PhD/LowEnergy/flashmatch/data/testing_MLL_FM/lateral_nuecc/",
+  "geom_identifier": "dune10kt",
+  "distribution": "lognormal",
+  "fit_trend_low": 20,
+  "fit_trend_up": 100,
+  "trend_thr": 28,
+  "q_cut_low": 150.0,
+  "apply_cut" :true
+}
