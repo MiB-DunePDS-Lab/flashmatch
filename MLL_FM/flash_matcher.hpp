@@ -87,6 +87,19 @@ public:
   float xprob_max = 0.;
   float n_hit;
   std::vector<float> exp_phs;
+
+  // For ML purposes
+  float reco_term_mean = 0.;
+  float reco_term_std  = 0.;
+  float reco_term_max  = 0.;
+  float reco_term_min  = 0.;
+  float noreco_term_mean = 0.;
+  float noreco_term_std  = 0.;
+  float noreco_term_max  = 0.;
+  float noreco_term_min  = 0.;
+  float exp_ph_sum = 0.;
+  float nhit_expected = 0.;
+
   
   float GetLikelihoodMatch(const ClusterTPC& tpc_cluster,
                            const ClusterPDS& pds_cluster,
@@ -94,6 +107,7 @@ public:
                            std::vector<float>& noreco_terms,
                            float x_sign = 1.) {
 
+    reset_ml_parameters();
     if (reco_terms.size()   >= 0) reco_terms.clear();
     if (noreco_terms.size() >= 0) noreco_terms.clear();
     
@@ -117,16 +131,18 @@ public:
       exit(1);
     }
 
-    // float weight_hit = 1.;
-    float weight_hit = 1./(n_hit*n_hit);
-    // float weight_unhit = 1.;
-    float weight_unhit = 1./(n_hit*n_hit);
+    float weight_hit = 1.;
+    float weight_unhit = 1.;
+    // float weight_hit = 1./(n_hit*n_hit);
+    // float weight_unhit = 1./(n_hit*n_hit);
     float weight_sum = 1.;
     // float weight_sum = 1./(std::accumulate(pds_cluster.reco_pes->begin(), pds_cluster.reco_pes->end(), 0.));
     for (size_t idx_opdet=0; idx_opdet<pds_cluster.reco_pes.size(); idx_opdet++){
       float voxel_vis = opDet_visMap[tpc_index][idx_opdet];// + opDet_visDirect_ArMapReflct[tpc_index][idx_opdet];
 
       exp_ph = E_reco*LY_times_PDE*voxel_vis;
+      exp_ph_sum += exp_ph;
+      if (exp_ph > 1.5) nhit_expected++; // HARD-CODED HARD CODE
       exp_phs[idx_opdet] = exp_ph;
       if(exp_ph==0) exp_ph = E_reco*LY_times_PDE*1.e-15;
       float P_hit_mu = (exp_ph<xprob_max) ? g_he->Eval(exp_ph) : 1.; // Avoid weird extrapolation where we
@@ -163,6 +179,15 @@ public:
           // std::cout << "e " << term << " " << NLL << std::endl;
       }
     }
+
+    reco_term_mean = (reco_terms.size()>0) ? std::accumulate(reco_terms.begin(), reco_terms.end(), 0.)/reco_terms.size() : 0.;
+    reco_term_std  = (reco_terms.size()>0) ? std::sqrt(std::accumulate(reco_terms.begin(), reco_terms.end(), 0., [this](float sum, float val){ return sum + (val - reco_term_mean)*(val - reco_term_mean); })/reco_terms.size()) : 0.;
+    reco_term_max  = (reco_terms.size()>0) ? *std::max_element(reco_terms.begin(), reco_terms.end()) : 0.;
+    reco_term_min  = (reco_terms.size()>0) ? *std::min_element(reco_terms.begin(), reco_terms.end()) : 0.;
+    noreco_term_mean = (noreco_terms.size()>0) ? std::accumulate(noreco_terms.begin(), noreco_terms.end(), 0.)/noreco_terms.size() : 0.;
+    noreco_term_std  = (noreco_terms.size()>0) ? std::sqrt(std::accumulate(noreco_terms.begin(), noreco_terms.end(), 0., [this](float sum, float val){ return sum + (val - noreco_term_mean)*(val - noreco_term_mean); })/noreco_terms.size()) : 0.;
+    noreco_term_max  = (noreco_terms.size()>0) ? *std::max_element(noreco_terms.begin(), noreco_terms.end()) : 0.;
+    noreco_term_min  = (noreco_terms.size()>0) ? *std::min_element(noreco_terms.begin(), noreco_terms.end()) : 0.;
 
     return NLL*weight_sum;
   } // GetLikelihoodMatch
@@ -226,6 +251,19 @@ private:
   std::vector<int> cryo_to_tpc;
   float tpc_min[3] = {0., 0., 0.};
   float tpc_max[3] = {0., 0., 0.};
+
+  void reset_ml_parameters() {
+    reco_term_mean = 0.;
+    reco_term_std  = 0.;
+    reco_term_max  = 0.;
+    reco_term_min  = 0.;
+    noreco_term_mean = 0.;
+    noreco_term_std  = 0.;
+    noreco_term_max  = 0.;
+    noreco_term_min  = 0.;
+    exp_ph_sum = 0.;
+    nhit_expected = 0.;
+  }
 
   void set_privatemembers(){
     TFile* visibility_file = TFile::Open(visibility_file_name, "READ");
