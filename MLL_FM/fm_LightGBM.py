@@ -50,6 +50,11 @@ def add_relative_features(df):
         method="first"
     )
 
+    df["abs_dt_nearest_flash_rank"] = g["abs_dt_nearest_flash"].rank(
+        ascending=True,
+        method="first"
+    )
+
     return df
 
 if __name__ == "__main__":
@@ -84,6 +89,9 @@ if __name__ == "__main__":
     val_df   = add_relative_features(val_df)
     print("After adding relative features")
 
+    # save val_df to a csv file for later use
+    val_df.to_csv(input_dir+"val_df_"+geom_identifier+".csv", index=False)
+
     print("Train events:", len(train_df["event_id"].unique()))
     print("Val events:", len(val_df["event_id"].unique()))
     print("Overlap:", set(train_events) & set(val_events))
@@ -110,6 +118,7 @@ if __name__ == "__main__":
         "close_totalpe",
         "close_nhits",
         "dt_nearest_flash",
+        "abs_dt_nearest_flash",
         "n_near_flashes",
         "near_totalpe",
         "near_nhits",
@@ -117,8 +126,10 @@ if __name__ == "__main__":
         "flash_cluster_dist",
         "nll_rank",
         "total_pe_rank",
+        "nhits_rank",
         "close_totalpe_rank",
         "close_nhits_rank",
+        "abs_dt_nearest_flash_rank"
     ]
 
 
