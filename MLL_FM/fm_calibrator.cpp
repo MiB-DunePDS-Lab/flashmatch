@@ -57,7 +57,7 @@ void fm_calibrator(){
 
   for (auto& idx_entry : MaxChargeIndxs){
     treeReader.SetEntry(idx_entry);
-    if (!(*MatchedOpFlashCorrectly) || *Charge<q_cut_low || *Charge>q_cut_high) continue;
+    if (*Charge<q_cut_low || *Charge>q_cut_high) continue;
     float driftTime = abs((*x_true-geom.anode_x)/drift_velocity);
     true_calib_info.push_back(std::make_tuple(*Charge, *E_true, driftTime, *Charge/(*E_true)));
   }

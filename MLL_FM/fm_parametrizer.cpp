@@ -69,9 +69,9 @@ void fm_parametrizer(){
       double stddev = h1_proj->GetStdDev();
 
       if (distribution == "lognormal") {
-        f_RecoExpDistr->SetParameters(log(mean), 0.45);
+        f_RecoExpDistr->SetParameters(log(mean), 0.35);
         f_RecoExpDistr->SetParLimits(0, log(mean-1*stddev), log(mean+1*stddev));
-        f_RecoExpDistr->SetParLimits(1, 0.01, 1.2);
+        f_RecoExpDistr->SetParLimits(1, 0.1, 1.2);
       }
       else if (distribution == "weibull") {
         f_RecoExpDistr->SetParameters(1.5, mean/1.2);
@@ -100,9 +100,9 @@ void fm_parametrizer(){
       
       // if (reco > 400) break; // Stop if reco is greater than 40
       if (exp_ph > 0 && h1_proj->GetEntries() > 400 && fit_res==0){
-        exp_phs.push_back(exp_ph);                       err_exp_phs.push_back(0);
-        par1s.push_back(f_RecoExpDistr->GetParameter(0));   err_par1.push_back(f_RecoExpDistr->GetParError(0));
-        par2s.push_back(f_RecoExpDistr->GetParameter(1));  err_par2.push_back(f_RecoExpDistr->GetParError(1));
+        exp_phs.push_back(exp_ph);                        err_exp_phs.push_back(0);
+        par1s.push_back(f_RecoExpDistr->GetParameter(0)); err_par1.push_back(f_RecoExpDistr->GetParError(0));
+        par2s.push_back(f_RecoExpDistr->GetParameter(1)); err_par2.push_back(f_RecoExpDistr->GetParError(1));
       }
     }
   } // handle h2_exp_reco and fit lognormal_pdf

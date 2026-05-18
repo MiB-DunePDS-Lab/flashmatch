@@ -341,10 +341,9 @@ void fm_ana(){
     fake_vertex_infos[fake_vertex_infos.size()-1] = true_vertex_info;
   }
 
-  // sort LLs_true
-  std::sort(LLs_true.begin(), LLs_true.end());
-  double hLL_min = LLs_true[0];
-  double hLL_max = LLs_true[size_t(LLs_true.size()*0.97)];
+  std::sort(LLs_fake.begin(), LLs_fake.end());
+  double hLL_min = LLs_fake[0];
+  double hLL_max = LLs_fake[size_t(LLs_fake.size()*0.90)];
 
   TH1D* h_LL       = new TH1D("h_LL",Form("%s;%s;%s","h_LL","LL","counts"), 200, hLL_min, hLL_max);
   TH1D* h_LL_scale = new TH1D("h_LL_scale",Form("%s;%s;%s","h_LL_scale","LL","counts"), 200, hLL_min, hLL_max);
