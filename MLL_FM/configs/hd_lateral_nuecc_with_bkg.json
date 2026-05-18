@@ -1,5 +1,5 @@
 {
-  "input_dir":  "/Users/federico/PhD/LowEnergy/flashmatch/data/testing_MLL_FM/",
+  "input_dir":  "/Users/federico/PhD/LowEnergy/flashmatch/data/testing_MLL_FM/lateral_nuecc/",
   "geom_identifier": "dune10kt",
   "distribution": "lognormal",
   "fit_trend_low": 20,

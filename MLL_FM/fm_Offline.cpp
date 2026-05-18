@@ -111,9 +111,9 @@ void fm_Offline(){
   TFile* output_file = TFile::Open((input_dir+"/MLL_Offline_"+geom_identifier+".root").c_str(), "RECREATE");
   Long64_t nn = tree->Draw("SignalParticleX", "", "goff");
   float max_drift = TMath::MaxElement(tree->GetSelectedRows(), tree->GetV1());
-  TEfficiency* he_EffvsDrift       = new TEfficiency("he_EffvsDrift",       "Efficiency vs Drift; Drift [cm]; Efficiency", 20, 0., double(max_drift));
-  TEfficiency* he_EffvsDrift_cheat = new TEfficiency("he_EffvsDrift_cheat", "Efficiency vs Drift; Drift [cm]; Efficiency", 20, 0., double(max_drift));
-  TEfficiency* he_EffvsDrift_maxpe = new TEfficiency("he_EffvsDrift_maxpe", "Efficiency vs Drift; Drift [cm]; Efficiency", 20, 0., double(max_drift));
+  TEfficiency* he_EffvsDrift       = new TEfficiency("he_eff_drift_nll",   "Efficiency vs Drift; Drift [cm]; Efficiency", 30, 0., double(max_drift));
+  TEfficiency* he_EffvsDrift_cheat = new TEfficiency("he_eff_drift_cheat", "Efficiency vs Drift; Drift [cm]; Efficiency", 30, 0., double(max_drift));
+  TEfficiency* he_EffvsDrift_maxpe = new TEfficiency("he_eff_drift_maxpe", "Efficiency vs Drift; Drift [cm]; Efficiency", 30, 0., double(max_drift));
   
   TH1D* h_LL = new TH1D("h_LL",Form("%s;%s;%s","h_LL","LL","counts"),
                         200, 0., 20.);

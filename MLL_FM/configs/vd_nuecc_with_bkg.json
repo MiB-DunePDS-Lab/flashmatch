@@ -1,0 +1,10 @@
+{
+  "input_dir":  "/Users/federico/PhD/LowEnergy/flashmatch/data/vd_testing_MLL_FM/with_bkg/",
+  "geom_identifier": "dunevd10kt",
+  "distribution": "lognormal",
+  "fit_trend_low": 84,
+  "fit_trend_up": 170,
+  "trend_thr": 84,
+  "q_cut_low": 150.0,
+  "apply_cut": true
+}
