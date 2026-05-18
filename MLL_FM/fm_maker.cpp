@@ -182,7 +182,7 @@ void fm_maker(){
   feature_tree->Branch("max_charge", &r.max_charge, "max_charge/F");
   feature_tree->Branch("y_reco", &r.y_reco, "y_reco/F");
   feature_tree->Branch("z_reco", &r.z_reco, "z_reco/F");
-  feature_tree->Branch("charge_nhits", &r.charge_nhits, "charge_nhits/F");
+  feature_tree->Branch("charge_nhits", &r.charge_nhits, "charge_nhits/I");
   feature_tree->Branch("total_pe", &r.total_pe, "total_pe/F");
   feature_tree->Branch("max_pe", &r.max_pe, "max_pe/F");
   feature_tree->Branch("totalpe_nhits_ratio", &r.totalpe_nhits_ratio, "totalpe_nhits_ratio/F");
@@ -240,7 +240,8 @@ void fm_maker(){
       r.max_pe = AdjOpFlashMaxPE[idx_flash];
       r.e_reco = likelihood_computer.E_reco;
       if (AdjOpFlashPE.At(idx_flash) == *MatchedOpFlashPE && 
-        AdjOpFlashTime.At(idx_flash) == *MatchedOpFlashTime)
+        AdjOpFlashTime.At(idx_flash) == *MatchedOpFlashTime &&
+        *MatchedOpFlashCorrectly)
         r.label = 2; // Correctly matched flash
       else
         r.label = AdjOpFlashPur[idx_flash] > 0. ? 1 : 0;
@@ -256,7 +257,7 @@ void fm_maker(){
       r.nhit_expected = likelihood_computer.nhit_expected;
 
       r.exp_reco_ratio = r.exp_ph_sum / (r.total_pe+1.e-6);
-      r.totalpe_nhits_ratio = r.total_pe / (r.charge_nhits+1.e-6);
+      r.totalpe_nhits_ratio = r.total_pe / (r.nhits+1.e-6);
       r.nhits_expnhits_ratio = r.nhits / (r.nhit_expected+1.e-6);
       r.time_diff = *Time - AdjOpFlashTime.At(idx_flash);
       
@@ -270,8 +271,8 @@ void fm_maker(){
       r.near_nhits = 0;
       for (size_t ii = 0; ii < AdjOpFlashTime.GetSize(); ii++){
         float dt = AdjOpFlashTime.At(idx_flash) - AdjOpFlashTime.At(ii);
-        if (std::abs(dt) < r.dt_nearest_flash && ii != idx_flash) r.dt_nearest_flash = dt;
-        if (std::abs(dt) < r.dt_nearest_pure && ii != idx_flash && AdjOpFlashPur.At(ii) > 0) r.dt_nearest_pure= dt;
+        if (std::abs(dt) < std::abs(r.dt_nearest_flash) && ii != idx_flash) r.dt_nearest_flash = dt;
+        if (std::abs(dt) < std::abs(r.dt_nearest_pure) && ii != idx_flash && AdjOpFlashPur.At(ii) > 0) r.dt_nearest_pure= dt;
         if (std::abs(dt) < time_window){
           r.n_close_flashes++;
           r.close_totalpe += AdjOpFlashPE.At(ii);

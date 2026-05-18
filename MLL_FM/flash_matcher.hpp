@@ -4,6 +4,7 @@
 #include <TFile.h>
 #include <cmath>
 #include <numeric>
+#include <algorithm>
 
 #include "TEfficiency.h"
 #include <TMVA/TSpline1.h>
