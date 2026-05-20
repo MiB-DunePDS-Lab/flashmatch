@@ -1,7 +1,7 @@
 {
   "ana_file_name": "SolarNuAnaMerged.root",
   "visibility_dir": "/Users/federico/PhD/LowEnergy/flashmatch/visibility/processed/",
-  "sample_config_file": "hd_central_nuecc_with_bkg.json",
+  "sample_config_file": "hd_lateral_nuecc_with_bkg.json",
   "q_cut_high": 70000.0,
   "fit_Qcorr_Etrue_low": 5,
   "fit_Qcorr_Etrue_up": 30,
@@ -14,5 +14,6 @@
   "verbose": true,
   "apply_cut": true,
   "n_combinations": 10,
-  "loop_on_tpc_clusters": true
+  "loop_on_tpc_clusters": true,
+  "use_preselection": true
 }
