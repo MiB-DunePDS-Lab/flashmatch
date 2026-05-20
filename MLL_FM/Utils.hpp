@@ -262,6 +262,7 @@ struct MLLConfigs{
   float q_cut_high;  
   size_t n_combinations;
   bool loop_on_tpc_clusters;
+  bool use_preselection;
 };
 
 inline MLLConfigs load_ana_config(const std::string &filename){
@@ -288,6 +289,7 @@ inline MLLConfigs load_ana_config(const std::string &filename){
   config.q_cut_high           = j.at("q_cut_high").get<float>();
   config.n_combinations       = j.at("n_combinations").get<size_t>();
   config.loop_on_tpc_clusters = j.at("loop_on_tpc_clusters").get<bool>();
+  config.use_preselection     = j.at("use_preselection").get<bool>();
   return config;
 }
 
