@@ -58,6 +58,7 @@ void fm_maker(){
   float light_yield              = mll_conf.light_yield;
   float arapuca_pde              = mll_conf.arapuca_pde;
   float q_cut_high               = mll_conf.q_cut_high;
+  bool use_preselection          = mll_conf.use_preselection;
   float LY_times_PDE             = light_yield * arapuca_pde;
   
   SampleConfigs sample_conf = load_sample_config("./configs/"+sample_config_file);
@@ -114,6 +115,7 @@ void fm_maker(){
   TTreeReaderArray<float> AdjOpFlashRecoZ(treeReader, "AdjOpFlashRecoZ");
   TTreeReaderArray<float> AdjOpFlashR(treeReader, "AdjOpFlashR");
   TTreeReaderArray<float> AdjOpFlashPur(treeReader, "AdjOpFlashPur");
+  TTreeReaderArray<bool>  AdjOpFlashPreselection(treeReader, "AdjOpFlashPreselection");
   TTreeReaderArray<float> AdjOpFlashPEperOpDet(treeReader, "AdjOpFlashPEperOpDet");
   TTreeReaderValue<float> MatchedOpFlashTime(treeReader, "MatchedOpFlashTime");
   TTreeReaderValue<float> MatchedOpFlashPE(treeReader, "MatchedOpFlashPE");
@@ -153,7 +155,8 @@ void fm_maker(){
   );
 
   // --- PREPARE OUTPUT -------------------------------------------------------
-  TFile* out_file = TFile::Open((input_dir+"MLL_Features_"+geom_identifier+".root").c_str(), "RECREATE");
+  std::string presel_suf = use_preselection ? "_preselected" : "";
+  TFile* out_file = TFile::Open((input_dir+"MLL_Features_"+geom_identifier+presel_suf+".root").c_str(), "RECREATE");
   TTree* feature_tree = new TTree("feature_tree", "feature_tree");
 
   Row r;
@@ -209,7 +212,9 @@ void fm_maker(){
 
   r.event_id = 0;
   std::vector<float> dummy_vec, dummy_vec2;
+  size_t last_index = MaxChargeIndxs[MaxChargeIndxs.size() - 1];
   for (auto& idx_entry : MaxChargeIndxs){
+    if (idx_entry % 300 == 0) std::cout << idx_entry <<"/"<< last_index << "\r" << std::flush;
     treeReader.SetEntry(idx_entry);
     ClusterTPC cluster = ClusterTPC(*Charge, *Time, *RecoY, *RecoZ);
     r.charge = *Charge;
@@ -227,6 +232,7 @@ void fm_maker(){
     }
     
     for (size_t idx_flash = 0; idx_flash < AdjOpFlashTime.GetSize(); idx_flash++){
+      if (use_preselection && !AdjOpFlashPreselection.At(idx_flash)) continue;
       std::vector<float> pe_per_opdet(AdjOpFlashPEperOpDet.begin() + idx_flash*geom.n_opdet, AdjOpFlashPEperOpDet.begin() + (idx_flash+1)*geom.n_opdet);
       ClusterPDS flash   = ClusterPDS(AdjOpFlashTime.At(idx_flash), pe_per_opdet);
       r.nll = likelihood_computer.GetLikelihoodMatch(cluster, flash, dummy_vec, dummy_vec2, 1.);
@@ -270,6 +276,7 @@ void fm_maker(){
       r.near_totalpe = 0;
       r.near_nhits = 0;
       for (size_t ii = 0; ii < AdjOpFlashTime.GetSize(); ii++){
+        if (use_preselection && !AdjOpFlashPreselection.At(ii)) continue;
         float dt = AdjOpFlashTime.At(idx_flash) - AdjOpFlashTime.At(ii);
         if (std::abs(dt) < std::abs(r.dt_nearest_flash) && ii != idx_flash) r.dt_nearest_flash = dt;
         if (std::abs(dt) < std::abs(r.dt_nearest_pure) && ii != idx_flash && AdjOpFlashPur.At(ii) > 0) r.dt_nearest_pure= dt;

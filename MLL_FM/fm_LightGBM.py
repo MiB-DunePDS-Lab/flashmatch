@@ -61,13 +61,15 @@ if __name__ == "__main__":
     with open("./configs/ana_config.json", "r") as f:
         ana_config = json.load(f)
     sample_config_file = ana_config["sample_config_file"]
+    use_preselection   = ana_config["use_preselection"]
 
     with open("./configs/"+sample_config_file, "r") as f:
         sample_config = json.load(f)
     input_dir       = sample_config["input_dir"]
     geom_identifier = sample_config["geom_identifier"]
 
-    df = uproot.open(input_dir+"MLL_Features_"+geom_identifier+".root")["feature_tree"].arrays(library="pd")
+    presel_suf = "_preselected" if use_preselection else ""
+    df = uproot.open(input_dir+"MLL_Features_"+geom_identifier+presel_suf+".root")["feature_tree"].arrays(library="pd")
     # print if any nan
     print("NaN values in the dataset:")
     print(df.isna().sum())
@@ -90,7 +92,7 @@ if __name__ == "__main__":
     print("After adding relative features")
 
     # save val_df to a csv file for later use
-    val_df.to_csv(input_dir+"val_df_"+geom_identifier+".csv", index=False)
+    val_df.to_csv(input_dir+"val_df_"+geom_identifier+presel_suf+".csv", index=False)
 
     print("Train events:", len(train_df["event_id"].unique()))
     print("Val events:", len(val_df["event_id"].unique()))
@@ -184,13 +186,14 @@ if __name__ == "__main__":
             model_mismatch += 1
         if not (group["my_label"] >= 1).any():
             cheat_mismatch += 1
-    print(f"Cheat Efficiency: {tryes - cheat_mismatch} / {tryes} = {cheat_mismatch/tryes:.4f}")
-    print(f"Model Efficiency: {tryes - model_mismatch} / {tryes} = {model_mismatch/tryes:.4f}")
-    print(f"Cheat Mismatch to Cheating Fraction: {cheat_mismatch/model_mismatch:.4f}")
+    print(f"Cheat Efficiency: {tryes - cheat_mismatch} / {tryes} = {(tryes - cheat_mismatch)/tryes:.4f}")
+    print(f"Model Efficiency: {tryes - model_mismatch} / {tryes} = {(tryes - model_mismatch)/tryes:.4f}")
+    print(f"Model/Cheat mismatches: {model_mismatch/cheat_mismatch:.4f}")
 
     
     # --- PLOTS ---------------------------------------------------------------
     # --- Prepare data ---
+    print("Preparing data for plots...")
     train_ndcg = evals_result["train"]["ndcg@1"]
     val_ndcg   = evals_result["val"]["ndcg@1"]
 
@@ -212,6 +215,7 @@ if __name__ == "__main__":
     # =========================================================
     # (1) Training curves
     # =========================================================
+    print("Plotting training curves...")
     ax = axes[0, 0]
     ax.plot(train_ndcg, label="Train")
     ax.plot(val_ndcg, label="Validation")
@@ -223,6 +227,7 @@ if __name__ == "__main__":
     # =========================================================
     # (2) Feature importance
     # =========================================================
+    print("Plotting feature importance...")
     ax = axes[0, 1]
     vals = importance[top_idx][::-1]
     names = np.array(feature_names)[top_idx][::-1]
@@ -238,6 +243,7 @@ if __name__ == "__main__":
     # =========================================================
     # (3) Score distribution
     # =========================================================
+    print("Plotting score distribution...")
     ax = axes[1, 0]
     using_lable_2 = (val_df["my_label"] == 2).any()
     if using_lable_2:
@@ -269,6 +275,7 @@ if __name__ == "__main__":
     # =========================================================
     # (4) SHAP summary (bar only)
     # =========================================================
+    print("Plotting SHAP summary...")
     ax = axes[1, 1]
     mmm = 7
     if mmm == 7: # to avoid Code is unreachable
@@ -287,6 +294,7 @@ if __name__ == "__main__":
     # =========================================================
     plt.tight_layout()
     plt.show()
+    fig.savefig(input_dir+"MLL_LightGBM_plots_"+geom_identifier+presel_suf+".png")
 
     # -------------------------------------------------------------------------
     # -------------------------------------------------------------------------
@@ -305,7 +313,7 @@ if __name__ == "__main__":
 
     # Create TEfficiency objects to store the mathcing efficiency and a function of x_true
     # of range (0, x_max) with 30 bins. Store it in a root file.
-    out_file = ROOT.TFile(input_dir+"/MLL_LightGBM_efficiency_"+geom_identifier+".root", "RECREATE")
+    out_file = ROOT.TFile(input_dir+"/MLL_LightGBM_efficiency_"+geom_identifier+presel_suf+".root", "RECREATE")
     out_file.cd()
     x_max = df["x_true"].max().max()
     he_model = ROOT.TEfficiency("he_eff_drift_model", "Matching Efficiency;True x [cm];Efficiency", 30, 0, x_max)
@@ -321,6 +329,10 @@ if __name__ == "__main__":
     he_cheat            = ROOT.TEfficiency("he_eff_drift_cheat", "Matching Efficiency (cheat);True x [cm];Efficiency", 30, 0, x_max)
 
     # df.loc[:, "my_label"] = (df["purity"] > 0).astype(int)
+    tryes2 = 0
+    max_pe_efficiency = 0
+    max_nll_weighted_efficiency = 0
+    cheat_efficiency = 0
     for event_id, group in df.groupby("event_id"):
         best_max_pe = group.loc[group["total_pe"].idxmax()]
         best_max_nll_weighted = group.loc[group["nll_weighted"].idxmin()]
@@ -337,6 +349,30 @@ if __name__ == "__main__":
         he_max_pe.Fill(catch_max_pe, abs(best_max_pe["x_true"]))
         he_max_nll_weighted.Fill(catch_max_nll_weighted, abs(best_max_nll_weighted["x_true"]))
         he_cheat.Fill(catch_cheat, abs(best_cheat["x_true"]))
+
+        tryes2 += 1
+        if catch_max_pe == 1:
+            max_pe_efficiency += 1
+        if catch_max_nll_weighted == 1:
+            max_nll_weighted_efficiency += 1
+        if catch_cheat == 1:
+            cheat_efficiency += 1
+
+    print(f"Max PE Efficiency: {max_pe_efficiency} / {tryes2} = {max_pe_efficiency/tryes2:.4f}")
+    print(f"Max NLL Weighted Efficiency: {max_nll_weighted_efficiency} / {tryes2} = {max_nll_weighted_efficiency/tryes2:.4f}")
+    print(f"Cheat Efficiency: {cheat_efficiency} / {tryes2} = {cheat_efficiency/tryes2:.4f}")
+
+    # Save all the "performance print" into a text file
+    with open(input_dir+"/MLL_LightGBM_performance_"+geom_identifier+presel_suf+".txt", "w") as f:
+        f.write(f"Top-1 Accuracy: {top1_acc:.4f} (it makes sense only if bynary labels are used)\n")
+        f.write(f"Top-1 Accuracy (label 2): {top1_acc_2:.4f}\n")
+        f.write(f"Top-1 Accuracy (label 1 or 2): {top1_acc_1_or_2:.4f}\n")
+        f.write(f"Cheat Efficiency: {(tryes - cheat_mismatch)}/{tryes} = {(tryes - cheat_mismatch)/tryes:.4f}\n")
+        f.write(f"Model Efficiency: {(tryes - model_mismatch)}/{tryes} = {(tryes - model_mismatch)/tryes:.4f}\n")
+        f.write(f"Model/Cheat mismatches: {model_mismatch}/{cheat_mismatch} = {model_mismatch/cheat_mismatch:.4f}\n")
+        f.write(f"Max PE Efficiency: {max_pe_efficiency}/{tryes2} = {max_pe_efficiency/tryes2:.4f}\n")
+        f.write(f"Max NLL Weighted Efficiency: {max_nll_weighted_efficiency}/{tryes2} = {max_nll_weighted_efficiency/tryes2:.4f}\n")
+        f.write(f"Cheat Efficiency: {cheat_efficiency}/{tryes2} = {cheat_efficiency/tryes2:.4f}\n")
 
     he_model.Write()
     he_max_pe.Write()
