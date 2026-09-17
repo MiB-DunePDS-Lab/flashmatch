@@ -3,6 +3,7 @@
 #include "TTreeReaderArray.h"
 #include "Utils.hpp"
 #include <flash_matcher.hpp>
+#include <vector>
 
 struct Row{
   // Event
@@ -39,6 +40,7 @@ struct Row{
   float e_reco, flash_cluster_dist;
   // True
   float x_true, y_true, z_true, e_true;
+  float x_reco;
   float dt_nearest_pure = 1e9;
   float purity;
 };
@@ -59,6 +61,8 @@ void fm_maker(){
   float arapuca_pde              = mll_conf.arapuca_pde;
   float q_cut_high               = mll_conf.q_cut_high;
   bool use_preselection          = mll_conf.use_preselection;
+  std::string calib_method       = mll_conf.calib_method;
+  float electron_lifetime        = mll_conf.electron_lifetime;
   float LY_times_PDE             = light_yield * arapuca_pde;
   
   SampleConfigs sample_conf = load_sample_config("./configs/"+sample_config_file);
@@ -80,7 +84,7 @@ void fm_maker(){
   calib_tree->SetBranchAddress("corr_lambda", &corr_lambda);
   calib_tree->GetEntry(0);
 
-  TFile* parametrizer_file  = TFile::Open((input_dir+"MLL_Parametrizer_"+geom_identifier+".root").c_str(), "READ");
+  TFile* parametrizer_file  = TFile::Open((input_dir+"MLL_Parametrizer_"+geom_identifier+"_"+calib_method+".root").c_str(), "READ");
   TF1* f_RecoExpDistr       = static_cast<TF1*>(parametrizer_file->Get("f_RecoExpDistr"));
   TF1* f_par1_trend         = static_cast<TF1*>(parametrizer_file->Get("f_par1_trend"));
   TF1* f_par2_trend         = static_cast<TF1*>(parametrizer_file->Get("f_par2_trend"));
@@ -113,6 +117,7 @@ void fm_maker(){
   TTreeReaderArray<float> AdjOpFlashY(treeReader, "AdjOpFlashPur");
   TTreeReaderArray<float> AdjOpFlashRecoY(treeReader, "AdjOpFlashRecoY");
   TTreeReaderArray<float> AdjOpFlashRecoZ(treeReader, "AdjOpFlashRecoZ");
+  TTreeReaderArray<float> AdjOpFlashNegativeLL(treeReader, "AdjOpFlashNegativeLL");
   TTreeReaderArray<float> AdjOpFlashR(treeReader, "AdjOpFlashR");
   TTreeReaderArray<float> AdjOpFlashPur(treeReader, "AdjOpFlashPur");
   TTreeReaderArray<bool>  AdjOpFlashPreselection(treeReader, "AdjOpFlashPreselection");
@@ -153,10 +158,12 @@ void fm_maker(){
     corr_lambda,          // Correction lambda value
     h2_exp_reco
   );
+  likelihood_computer.calib_method = calib_method;
+  likelihood_computer.electron_lifetime = electron_lifetime;
 
   // --- PREPARE OUTPUT -------------------------------------------------------
   std::string presel_suf = use_preselection ? "_preselected" : "";
-  TFile* out_file = TFile::Open((input_dir+"MLL_Features_"+geom_identifier+presel_suf+".root").c_str(), "RECREATE");
+  TFile* out_file = TFile::Open((input_dir+"MLL_Features_"+geom_identifier+"_"+calib_method+presel_suf+".root").c_str(), "RECREATE");
   TTree* feature_tree = new TTree("feature_tree", "feature_tree");
 
   Row r;
@@ -206,15 +213,20 @@ void fm_maker(){
   feature_tree->Branch("y_true", &r.y_true, "y_true/F");
   feature_tree->Branch("z_true", &r.z_true, "z_true/F");
   feature_tree->Branch("e_true", &r.e_true, "e_true/F");
+  feature_tree->Branch("x_reco", &r.x_reco, "x_reco/F");
   feature_tree->Branch("dt_nearest_pure", &r.dt_nearest_pure, "dt_nearest_pure/F");
   feature_tree->Branch("purity", &r.purity, "purity/F");
 
 
   r.event_id = 0;
+  bool black_list_created = false;
   std::vector<float> dummy_vec, dummy_vec2;
+  std::vector<float> pe_per_opdet(geom.n_opdet, 0.);
   size_t last_index = MaxChargeIndxs[MaxChargeIndxs.size() - 1];
   for (auto& idx_entry : MaxChargeIndxs){
     if (idx_entry % 300 == 0) std::cout << idx_entry <<"/"<< last_index << "\r" << std::flush;
+    // if (idx_entry % 300 == 0 && idx_entry>5) break;
+    std::vector<int> black_list = {};
     treeReader.SetEntry(idx_entry);
     ClusterTPC cluster = ClusterTPC(*Charge, *Time, *RecoY, *RecoZ);
     r.charge = *Charge;
@@ -231,9 +243,27 @@ void fm_maker(){
       continue; // Skip if there are no adjacent flashes
     }
     
+    // create a black list of identical flashes, we will considet only one of them and skip the others to avoid overcounting
     for (size_t idx_flash = 0; idx_flash < AdjOpFlashTime.GetSize(); idx_flash++){
+      for (size_t jj = idx_flash+1; jj < AdjOpFlashTime.GetSize(); jj++){
+        if (AdjOpFlashTime.At(idx_flash) == AdjOpFlashTime.At(jj) &&
+          AdjOpFlashPE.At(idx_flash) == AdjOpFlashPE.At(jj) &&
+          AdjOpFlashNHits.At(idx_flash) == AdjOpFlashNHits.At(jj) &&
+          AdjOpFlashPur.At(idx_flash) == AdjOpFlashPur.At(jj) &&
+          AdjOpFlashRecoY.At(idx_flash) == AdjOpFlashRecoY.At(jj) &&
+          AdjOpFlashRecoZ.At(idx_flash) == AdjOpFlashRecoZ.At(jj) &&
+          AdjOpFlashNegativeLL.At(idx_flash) == AdjOpFlashNegativeLL.At(jj) ){
+          black_list.push_back(jj);
+          black_list_created = true;
+        }
+      }
+    }
+    
+    for (size_t idx_flash = 0; idx_flash < AdjOpFlashTime.GetSize(); idx_flash++){
+      // skip if in the black list
+      if (std::find(black_list.begin(), black_list.end(), idx_flash) != black_list.end()) continue;
       if (use_preselection && !AdjOpFlashPreselection.At(idx_flash)) continue;
-      std::vector<float> pe_per_opdet(AdjOpFlashPEperOpDet.begin() + idx_flash*geom.n_opdet, AdjOpFlashPEperOpDet.begin() + (idx_flash+1)*geom.n_opdet);
+      pe_per_opdet.assign(AdjOpFlashPEperOpDet.begin() + idx_flash*geom.n_opdet, AdjOpFlashPEperOpDet.begin() + (idx_flash+1)*geom.n_opdet);
       ClusterPDS flash   = ClusterPDS(AdjOpFlashTime.At(idx_flash), pe_per_opdet);
       r.nll = likelihood_computer.GetLikelihoodMatch(cluster, flash, dummy_vec, dummy_vec2, 1.);
       r.nhits = AdjOpFlashNHits[idx_flash];
@@ -261,6 +291,7 @@ void fm_maker(){
       r.noreco_term_min = likelihood_computer.noreco_term_min;
       r.exp_ph_sum = likelihood_computer.exp_ph_sum;
       r.nhit_expected = likelihood_computer.nhit_expected;
+      r.x_reco = likelihood_computer.x_reco;
 
       r.exp_reco_ratio = r.exp_ph_sum / (r.total_pe+1.e-6);
       r.totalpe_nhits_ratio = r.total_pe / (r.nhits+1.e-6);
@@ -276,8 +307,26 @@ void fm_maker(){
       r.near_totalpe = 0;
       r.near_nhits = 0;
       for (size_t ii = 0; ii < AdjOpFlashTime.GetSize(); ii++){
+        // skip if in the black list
+        if (std::find(black_list.begin(), black_list.end(), ii) != black_list.end()) continue;
         if (use_preselection && !AdjOpFlashPreselection.At(ii)) continue;
         float dt = AdjOpFlashTime.At(idx_flash) - AdjOpFlashTime.At(ii);
+
+        // if (ii != idx_flash &&
+        //   AdjOpFlashTime.At(ii) == AdjOpFlashTime.At(idx_flash) &&
+        //   AdjOpFlashPE.At(ii) == AdjOpFlashPE.At(idx_flash) &&
+        //   AdjOpFlashNHits.At(ii) == AdjOpFlashNHits.At(idx_flash) &&
+        //   AdjOpFlashPur.At(ii) == AdjOpFlashPur.At(idx_flash) &&
+        //   AdjOpFlashRecoY.At(ii) == AdjOpFlashRecoY.At(idx_flash) &&
+        //   AdjOpFlashRecoZ.At(ii) == AdjOpFlashRecoZ.At(idx_flash) &&
+        //   AdjOpFlashNegativeLL.At(ii) == AdjOpFlashNegativeLL.At(idx_flash) ){
+        //   std::cout << "Warning: Found identical flash at index " << ii << " " << idx_flash <<
+        //     " " << AdjOpFlashTime.At(ii) << " " << AdjOpFlashPE.At(ii) << " " << AdjOpFlashNHits.At(ii) << " " << AdjOpFlashPur.At(ii) <<
+        //     " for entry " << idx_entry << 
+        //     " label " << r.label <<
+        //     std::endl;
+        // }
+
         if (std::abs(dt) < std::abs(r.dt_nearest_flash) && ii != idx_flash) r.dt_nearest_flash = dt;
         if (std::abs(dt) < std::abs(r.dt_nearest_pure) && ii != idx_flash && AdjOpFlashPur.At(ii) > 0) r.dt_nearest_pure= dt;
         if (std::abs(dt) < time_window){
@@ -306,5 +355,9 @@ void fm_maker(){
   feature_tree->Write("", TObject::kOverwrite);
   out_file->Close();
   ana_file->Close();
+
+  if (black_list_created) {
+    std::cout << "Warning: A black list of identical flashes was created. This means that there were flashes with identical properties (time, PE, NHits, purity, reco Y and Z, negative log-likelihood) in the same event. Only one of these identical flashes was considered for each set of identical flashes to avoid overcounting. Please check the output file and the logs for more details." << std::endl;
+  }
   return;
 }

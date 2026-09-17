@@ -121,6 +121,13 @@ inline float give_me_Ereco(float calib_c, float calib_slope, float corr_lambda,
   return E_reco;
 }
 
+inline float give_me_Ereco(float charge, float dt, float electron_lifetime){
+  // From Maritza:
+  // CCal = 195.85, Wion = 23.6e-6, Beta=0.83, Rc=0.63
+  // (Cclal*Wion)/(Beta*Rc) = 8.8e-3
+  float E_reco = charge * exp(dt / electron_lifetime) * 8.8e-3;;
+  return E_reco;
+}
 
 // --- HANDLE VISIBILITIES ----------------------------------------------------
 
@@ -259,10 +266,12 @@ struct MLLConfigs{
   float yz_fiducial_cut;
   float x_fiducial_cut;
   // bool verbose;
-  float q_cut_high;  
+  float q_cut_high;
+  float electron_lifetime; // in microseconds
   size_t n_combinations;
   bool loop_on_tpc_clusters;
   bool use_preselection;
+  std::string calib_method; // charge or true_energy
 };
 
 inline MLLConfigs load_ana_config(const std::string &filename){
@@ -287,9 +296,12 @@ inline MLLConfigs load_ana_config(const std::string &filename){
   config.x_fiducial_cut       = j.at("x_fiducial_cut").get<float>();
   // config.verbose              = j.at("verbose").get<bool>();
   config.q_cut_high           = j.at("q_cut_high").get<float>();
+  config.electron_lifetime   = j.at("electron_lifetime").get<float>();
   config.n_combinations       = j.at("n_combinations").get<size_t>();
   config.loop_on_tpc_clusters = j.at("loop_on_tpc_clusters").get<bool>();
   config.use_preselection     = j.at("use_preselection").get<bool>();
+  config.calib_method         = j.at("calib_method").get<std::string>();
+
   return config;
 }
 

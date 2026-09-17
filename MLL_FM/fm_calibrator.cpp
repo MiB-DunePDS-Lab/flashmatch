@@ -18,6 +18,7 @@ void fm_calibrator(){
   // --- CONFIGS ---------------------------------------------------------------
   MLLConfigs mll_conf = load_ana_config("./configs/ana_config.json");
   std::string ana_file_name      = mll_conf.ana_file_name;
+  std::string calib_method       = mll_conf.calib_method;
   std::string sample_config_file = mll_conf.sample_config_file;
   std::string visibility_dir     = mll_conf.visibility_dir;
   double fit_Qcorr_Etrue_low     = mll_conf.fit_Qcorr_Etrue_low;
@@ -112,7 +113,7 @@ void fm_calibrator(){
   calib_c = f_Calib->GetParameter(0); calib_slope = f_Calib->GetParameter(1);
   calib_tree->Fill();
 
-  TFile* calibrator_file = TFile::Open((input_dir+"MLL_Calibrator_"+geom_identifier+".root").c_str(), "RECREATE");
+  TFile* calibrator_file = TFile::Open((input_dir+"MLL_Calibrator_"+geom_identifier+"_"+calib_method+".root").c_str(), "RECREATE");
   calibrator_file->cd();
   calib_tree->Write();
   h2_QperE_driftTime->Write();

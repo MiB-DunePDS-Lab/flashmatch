@@ -62,14 +62,20 @@ if __name__ == "__main__":
         ana_config = json.load(f)
     sample_config_file = ana_config["sample_config_file"]
     use_preselection   = ana_config["use_preselection"]
+    calib_method       = ana_config["calib_method"]
 
     with open("./configs/"+sample_config_file, "r") as f:
         sample_config = json.load(f)
     input_dir       = sample_config["input_dir"]
     geom_identifier = sample_config["geom_identifier"]
 
+    with open("./configs/"+geom_identifier+".json", "r") as f:
+        dune_geom_config = json.load(f)
+    anode_x = dune_geom_config["anode_x"]
+    print(f"Using geometry: {geom_identifier} with anode_x = {anode_x} cm")
+
     presel_suf = "_preselected" if use_preselection else ""
-    df = uproot.open(input_dir+"MLL_Features_"+geom_identifier+presel_suf+".root")["feature_tree"].arrays(library="pd")
+    df = uproot.open(input_dir+"MLL_Features_"+geom_identifier+"_"+calib_method+presel_suf+".root")["feature_tree"].arrays(library="pd")
     # print if any nan
     print("NaN values in the dataset:")
     print(df.isna().sum())
@@ -92,7 +98,7 @@ if __name__ == "__main__":
     print("After adding relative features")
 
     # save val_df to a csv file for later use
-    val_df.to_csv(input_dir+"val_df_"+geom_identifier+presel_suf+".csv", index=False)
+    val_df.to_csv(input_dir+"val_df_"+geom_identifier+"_"+calib_method+presel_suf+".csv", index=False)
 
     print("Train events:", len(train_df["event_id"].unique()))
     print("Val events:", len(val_df["event_id"].unique()))
@@ -294,7 +300,7 @@ if __name__ == "__main__":
     # =========================================================
     plt.tight_layout()
     plt.show()
-    fig.savefig(input_dir+"MLL_LightGBM_plots_"+geom_identifier+presel_suf+".png")
+    fig.savefig(input_dir+"MLL_LightGBM_plots_"+geom_identifier+"_"+calib_method+presel_suf+".png")
 
     # -------------------------------------------------------------------------
     # -------------------------------------------------------------------------
@@ -313,20 +319,46 @@ if __name__ == "__main__":
 
     # Create TEfficiency objects to store the mathcing efficiency and a function of x_true
     # of range (0, x_max) with 30 bins. Store it in a root file.
-    out_file = ROOT.TFile(input_dir+"/MLL_LightGBM_efficiency_"+geom_identifier+presel_suf+".root", "RECREATE")
+    out_file = ROOT.TFile(input_dir+"/MLL_LightGBM_efficiency_"+geom_identifier+"_"+calib_method+presel_suf+".root", "RECREATE")
     out_file.cd()
-    x_max = df["x_true"].max().max()
-    he_model = ROOT.TEfficiency("he_eff_drift_model", "Matching Efficiency;True x [cm];Efficiency", 30, 0, x_max)
+    max_drift = df["x_true"].max().max() if geom_identifier == "dune10kt" else df["x_true"].max().max() - df["x_true"].min().min()
+    print(f"Max drift distance: {max_drift} cm")
+    he_model  = ROOT.TEfficiency("he_eff_drift_model", "Matching Efficiency;Drift [cm];Efficiency", 30, 0., max_drift)
+    he_max_pe = ROOT.TEfficiency("he_eff_drift_maxpe", "Matching Efficiency (max_pe);Drift [cm];Efficiency", 30, 0, max_drift)
+    he_nll    = ROOT.TEfficiency("he_eff_drift_nll", "Matching Efficiency (nll);Drift [cm];Efficiency", 30, 0, max_drift)
+    he_cheat = ROOT.TEfficiency("he_eff_drift_cheat", "Matching Efficiency (cheat);Drift [cm];Efficiency", 30, 0, max_drift)
+    # Create a dictionary of TEfficiency for e_true in the range (5,7) (7,9) (9,11) (11,13) (13,15) (15,17)
+    # givin the mid-point as name (6, 8, 10, 12, 14, 16)
+    he_model_dict = {}
+    he_max_pe_dict = {}
+    he_nll_dict = {}
+    he_cheat_dict = {}
+    energy_bins = [(5,7), (7,9), (9,11), (11,13), (13,15), (15,17)]
+    for e_true_min, e_true_max in energy_bins:
+        e_true_mid = int((e_true_min + e_true_max) / 2)
+        he_model_dict[e_true_mid] = ROOT.TEfficiency(f"he_eff_drift_model_e_{e_true_mid}", f"Matching Efficiency (e_true in ({e_true_min},{e_true_max}));Drift [cm];Efficiency", 30, 0., max_drift)
+        he_max_pe_dict[e_true_mid] = ROOT.TEfficiency(f"he_eff_drift_maxpe_e_{e_true_mid}", f"Matching Efficiency (max_pe, e_true in ({e_true_min},{e_true_max}));Drift [cm];Efficiency", 30, 0, max_drift)
+        he_nll_dict[e_true_mid] = ROOT.TEfficiency(f"he_eff_drift_nll_e_{e_true_mid}", f"Matching Efficiency (nll, e_true in ({e_true_min},{e_true_max}));Drift [cm];Efficiency", 30, 0, max_drift)
+        he_cheat_dict[e_true_mid] = ROOT.TEfficiency(f"he_eff_drift_cheat_e_{e_true_mid}", f"Matching Efficiency (cheat, e_true in ({e_true_min},{e_true_max}));Drift [cm];Efficiency", 30, 0, max_drift)
+    
     for _, row in best.iterrows():
         catch = 1 if int(row["my_label"] > 0) else 0
-        he_model.Fill(catch, abs(row["x_true"]))
+        x_drift = abs(row["x_true"]) if geom_identifier == "dune10kt" else anode_x - row["x_true"]
+        he_model.Fill(catch, x_drift)
+        e_true = row["e_true"]
+        energy_bin = None
+        for e_true_min, e_true_max in energy_bins:
+            if e_true_min <= e_true < e_true_max:
+                energy_bin = (e_true_min, e_true_max)
+                break
+        if energy_bin is not None:
+            e_true_mid = (energy_bin[0] + energy_bin[1]) / 2
+            he_model_dict[e_true_mid].Fill(catch, x_drift)
+        
         # catch = 1 if row["purity"] > 0. else 0
         # he_model.Fill(catch, abs(row["x_true"]))
 
 
-    he_max_pe           = ROOT.TEfficiency("he_eff_drift_maxpe", "Matching Efficiency (max_pe);True x [cm];Efficiency", 30, 0, x_max)
-    he_max_nll_weighted = ROOT.TEfficiency("he_eff_drift_nll", "Matching Efficiency (max_nll_weighted);True x [cm];Efficiency", 30, 0, x_max)
-    he_cheat            = ROOT.TEfficiency("he_eff_drift_cheat", "Matching Efficiency (cheat);True x [cm];Efficiency", 30, 0, x_max)
 
     # df.loc[:, "my_label"] = (df["purity"] > 0).astype(int)
     tryes2 = 0
@@ -345,10 +377,11 @@ if __name__ == "__main__":
         # catch_max_pe = 1 if best_max_pe["purity"] > 0. else 0
         # catch_max_nll_weighted = 1 if best_max_nll_weighted["purity"] > 0. else 0
         # catch_cheat = 1 if best_cheat["purity"] > 0. else 0
-        
-        he_max_pe.Fill(catch_max_pe, abs(best_max_pe["x_true"]))
-        he_max_nll_weighted.Fill(catch_max_nll_weighted, abs(best_max_nll_weighted["x_true"]))
-        he_cheat.Fill(catch_cheat, abs(best_cheat["x_true"]))
+
+        x_drift = abs(best_max_pe["x_true"]) if geom_identifier == "dune10kt" else anode_x - best_max_pe["x_true"]
+        he_max_pe.Fill(catch_max_pe, x_drift)
+        he_nll.Fill(catch_max_nll_weighted, x_drift)
+        he_cheat.Fill(catch_cheat, x_drift)
 
         tryes2 += 1
         if catch_max_pe == 1:
@@ -358,12 +391,24 @@ if __name__ == "__main__":
         if catch_cheat == 1:
             cheat_efficiency += 1
 
+        energy_bin = None
+        e_true = best_max_pe["e_true"]
+        for e_true_min, e_true_max in energy_bins:
+            if e_true_min <= e_true < e_true_max:
+                energy_bin = (e_true_min, e_true_max)
+                break
+        if energy_bin is not None:
+            e_true_mid = (energy_bin[0] + energy_bin[1]) / 2
+            he_max_pe_dict[e_true_mid].Fill(catch_max_pe, x_drift)
+            he_nll_dict[e_true_mid].Fill(catch_max_nll_weighted, x_drift)
+            he_cheat_dict[e_true_mid].Fill(catch_cheat, x_drift)
+
     print(f"Max PE Efficiency: {max_pe_efficiency} / {tryes2} = {max_pe_efficiency/tryes2:.4f}")
     print(f"Max NLL Weighted Efficiency: {max_nll_weighted_efficiency} / {tryes2} = {max_nll_weighted_efficiency/tryes2:.4f}")
     print(f"Cheat Efficiency: {cheat_efficiency} / {tryes2} = {cheat_efficiency/tryes2:.4f}")
 
     # Save all the "performance print" into a text file
-    with open(input_dir+"/MLL_LightGBM_performance_"+geom_identifier+presel_suf+".txt", "w") as f:
+    with open(input_dir+"/MLL_LightGBM_performance_"+geom_identifier+"_"+calib_method+"_"+presel_suf+".txt", "w") as f:
         f.write(f"Top-1 Accuracy: {top1_acc:.4f} (it makes sense only if bynary labels are used)\n")
         f.write(f"Top-1 Accuracy (label 2): {top1_acc_2:.4f}\n")
         f.write(f"Top-1 Accuracy (label 1 or 2): {top1_acc_1_or_2:.4f}\n")
@@ -376,6 +421,11 @@ if __name__ == "__main__":
 
     he_model.Write()
     he_max_pe.Write()
-    he_max_nll_weighted.Write()
+    he_nll.Write()
     he_cheat.Write()
+    for e_true_mid in he_model_dict:
+        he_model_dict[e_true_mid].Write()
+        he_max_pe_dict[e_true_mid].Write()
+        he_nll_dict[e_true_mid].Write()
+        he_cheat_dict[e_true_mid].Write()
     out_file.Close()

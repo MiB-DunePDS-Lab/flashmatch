@@ -13,6 +13,7 @@ void fm_parametrizer(){
   // --- CONFIGS ---------------------------------------------------------------
   MLLConfigs mll_conf = load_ana_config("./configs/ana_config.json");
   std::string sample_config_file = mll_conf.sample_config_file;
+  std::string calib_method       = mll_conf.calib_method;
   
   SampleConfigs sample_conf = load_sample_config("./configs/"+sample_config_file);
   std::string input_dir       = sample_conf.input_dir;
@@ -22,7 +23,7 @@ void fm_parametrizer(){
   double fit_trend_up         = sample_conf.fit_trend_up;
   
   // --- INPUTS ---------------------------------------------------------------
-  TFile* distribution_file = TFile::Open((input_dir+"MLL_Distributions_"+geom_identifier+".root").c_str(), "READ");
+  TFile* distribution_file = TFile::Open((input_dir+"MLL_Distributions_"+geom_identifier+"_"+calib_method+".root").c_str(), "READ");
   TH2D* h2_exp_reco        = static_cast<TH2D*>(distribution_file->Get("h2_exp_reco"));
   TEfficiency* he_hit_prob = static_cast<TEfficiency*>(distribution_file->Get("he_hit_prob"));
  
@@ -52,7 +53,7 @@ void fm_parametrizer(){
   std::vector<double> par1s, par2s, exp_phs;
   std::vector<double> err_par1, err_par2, err_exp_phs;
   
-  TFile* out_file = TFile::Open((input_dir+"MLL_Parametrizer_"+geom_identifier+".root").c_str(), "RECREATE");
+  TFile* out_file = TFile::Open((input_dir+"MLL_Parametrizer_"+geom_identifier+"_"+calib_method+".root").c_str(), "RECREATE");
   out_file->mkdir("projections");
   out_file->cd("projections");
   
@@ -121,7 +122,7 @@ void fm_parametrizer(){
   if (distribution == "lognormal") {
     g_par1->SetTitle("log(MPV) vs Expected Photons;#Expected Photons;log(MPV)");
     f_par1_trend = new TF1("f_par1_trend", "[0]+[1]*log(x+[2])", 0., 2000);
-    f_par1_trend->SetParNames("offset","log_slope","linear_slope");
+    f_par1_trend->SetParNames("C","A","x_{0}");
     f_par1_trend->SetParameters(-0.5,1.2,1.0);  
     f_par1_trend->SetParLimits(1, 0.2, 2.0);
     f_par1_trend->SetParLimits(2, 0.0, 10.0);
@@ -132,7 +133,7 @@ void fm_parametrizer(){
     // f_par2_trend->SetParLimits(2,0,10);    
     // f_par2_trend->SetParLimits(4,0,10);   
     f_par2_trend = new TF1("f_par2_trend", "[0]+[1]*exp([2]*(x-[3]))", 0., 2000);
-    f_par2_trend->SetParNames("offset","exp_slope","exp_rate","exp_x0");
+    f_par2_trend->SetParNames("C","A","#lambda","b");
     f_par2_trend->SetParameters(g_par2->Eval(fit_trend_up), 0.5, -0.03, -9);
     f_par2_trend->SetParLimits(0, g_par2->Eval(fit_trend_up)*0.7, g_par2->Eval(fit_trend_up)*1.5);
     // f_par2_trend->SetParLimits(1, 0.0, 5.0);

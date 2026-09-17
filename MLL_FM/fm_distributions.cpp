@@ -4,7 +4,9 @@
 #include "TROOT.h"
 #include "TString.h"
 #include "TEntryList.h"
+#include "TProfile.h"
 #include "TTree.h"
+#include "TMath.h"
 #include <cstddef>
 #include <cstdio>
 #include <filesystem>
@@ -26,6 +28,8 @@ void fm_distributions(){
   float min_visibility             = mll_conf.min_visibility;
   float fiducial_cut               = mll_conf.yz_fiducial_cut;
   float x_cut                      = mll_conf.x_fiducial_cut;
+  float electron_lifetime         = mll_conf.electron_lifetime;
+  std::string calib_method         = mll_conf.calib_method;
   float LY_times_PDE               = light_yield * arapuca_pde; // Light yield times the arapuca pde
 
   SampleConfigs sample_conf = load_sample_config("./configs/"+sample_config_file);
@@ -75,7 +79,7 @@ void fm_distributions(){
 
 
   // --- PREPARE OUTPUT -------------------------------------------------------
-  TFile* out_file = TFile::Open((input_dir+"MLL_Distributions_"+geom_identifier+".root").c_str(), "RECREATE");
+  TFile* out_file = TFile::Open((input_dir+"MLL_Distributions_"+geom_identifier+"_"+calib_method+".root").c_str(), "RECREATE");
   TTree* anode_tree = new TTree("anode_tree", "anode_tree");
   anode_tree->Branch("anode_x", &anode_x);
   anode_tree->Fill();
@@ -83,7 +87,7 @@ void fm_distributions(){
   TTree* tpc_pds_tree = new TTree("tpc_pds_tree", "tpc_pds_tree");
   Int_t ifile, iev;
   float charge, time_tpc, time_pds, my_x_reco, x_reco, y_reco, z_reco, e_reco;
-  float x_true, y_true, z_true, e_true;
+  float x_true, y_true, z_true, e_true, e_main;
   std::vector<float>* reco_pes          = nullptr;
   std::vector<float>* exp_phs           = nullptr;
   std::vector<int>* opdets              = nullptr;
@@ -105,6 +109,7 @@ void fm_distributions(){
   tpc_pds_tree->Branch("y_true",    &y_true);
   tpc_pds_tree->Branch("z_true",    &z_true);
   tpc_pds_tree->Branch("e_true",    &e_true);
+  tpc_pds_tree->Branch("e_main",    &e_main);
   for(size_t i=0; i<n_opdet; i++){
     opdets->push_back(i);
   }
@@ -171,7 +176,7 @@ void fm_distributions(){
   std::vector<size_t> MaxChargeIndxs = take_max_charge_indices(solarnu_tree, "Event", "Charge");
 
   int sn_iev = 0; int sn_flag = 0;
-  float TrueX = 0.; float TrueY = 0.; float TrueZ = 0.;
+  float TrueX = 0.; float TrueY = 0.; float TrueZ = 0.; float MainE = 0.;
   float TrueE = 0.;
   float MatchedOpFlashRecoX = 0.;
   float MatchedOpFlashPurity = 0.;
@@ -192,6 +197,9 @@ void fm_distributions(){
   solarnu_tree->SetBranchAddress("SignalParticleX",          &TrueX);
   solarnu_tree->SetBranchAddress("SignalParticleY",          &TrueY);
   solarnu_tree->SetBranchAddress("SignalParticleZ",          &TrueZ);
+
+  solarnu_tree->SetBranchAddress("MainE",                     &MainE);
+
   solarnu_tree->SetBranchAddress("MatchedOpFlashRecoX",      &MatchedOpFlashRecoX);
   // solarnu_tree->SetBranchAddress("MatchedOpFlashRecoY",      &MatchedOpFlashRecoY);
   // solarnu_tree->SetBranchAddress("MatchedOpFlashRecoZ",      &MatchedOpFlashRecoZ);
@@ -209,12 +217,13 @@ void fm_distributions(){
   size_t last_index = MaxChargeIndxs[MaxChargeIndxs.size() - 1];
   for (auto& idx_entry : MaxChargeIndxs){
     solarnu_tree->GetEntry(idx_entry);
-    if (idx_entry % 100 == 0) std::cout << idx_entry <<"/"<< last_index << "\r" << std::flush;
+    if (idx_entry % 300 == 0) std::cout << idx_entry <<"/"<< last_index << "\r" << std::flush;
     if (!MatchedOpFlashCorrectly) continue;
     iev = sn_iev;
 
     x_reco = MatchedOpFlashRecoX; y_reco = RecoY; z_reco = RecoZ;
     x_true = TrueX; y_true = TrueY; z_true = TrueZ; e_true = TrueE;
+    e_main = MainE;
     // if (MatchedOpFlashPurity<0.9) continue;
 
 
@@ -240,7 +249,7 @@ void fm_distributions(){
     double dt = tpc_time - MatchedOpFlashTime;
     float x_sign = (geom_identifier == "dune10kt" && x_true <= 0) ? -1. : 1.;
     my_x_reco = (geom_identifier=="dune10kt") ? geom.anode_x+x_sign*dt*drift_velocity : geom.anode_x-dt*drift_velocity;
-    e_reco = give_me_Ereco(calib_c, calib_slope, corr_lambda, dt, charge);
+    e_reco = (calib_method == "true_energy") ? give_me_Ereco(calib_c, calib_slope, corr_lambda, dt, charge) : give_me_Ereco(charge, dt, electron_lifetime);
     time_pds = MatchedOpFlashTime;
     time_tpc = tpc_time;
 
@@ -279,15 +288,33 @@ void fm_distributions(){
   TEfficiency* he_hit_prob = new TEfficiency(*h_expreco,*h_exp);
   he_hit_prob->SetTitle("Hit Probability;Expected #Pe;Reconstruction Probability");
   he_hit_prob->SetName("he_hit_prob");
+  // h2_exp_reco TProfile
+  TProfile* h2_exp_reco_profile = h2_exp_reco->ProfileX();
+  h2_exp_reco_profile->SetTitle("Reco #Pe vs Expected #Pe;Expected #Pe;Average Reco #Pe");
+  // A new TGraphError whose error bar are the std dev of the reco #Pe distribution in each expected #Pe bin
+  TGraphErrors* h2_exp_reco_profile_stddev = new TGraphErrors();
+  h2_exp_reco_profile_stddev->SetName("h2_exp_reco_profile_stddev");
+  h2_exp_reco_profile_stddev->SetTitle("Reco #Pe Std Dev vs Expected #Pe;Expected #Pe;Std Dev of Reco #Pe");
+  for (int i=1; i<=h2_exp_reco->GetNbinsX(); i++) {
+    // project the reco PE distribution in this expected PE bin, take average and std dev, and fill the TGraphErrors
+    TH1D* exp_proj = h2_exp_reco->ProjectionY(Form("exp_proj_%d", i), i, i, "e");
+    double exp_ph = exp_proj->GetMean();
+    double reco_pe_stddev = exp_proj->GetStdDev();
+    double reco_pe_mean = h2_exp_reco->GetXaxis()->GetBinCenter(i);
+    h2_exp_reco_profile_stddev->AddPoint(reco_pe_mean, exp_ph);
+    h2_exp_reco_profile_stddev->SetPointError(h2_exp_reco_profile_stddev->GetN()-1, 0, reco_pe_stddev);
+  }
 
   // --- WRITE OUTPUT ---------------------------------------------------------
   out_file->cd();
-  anode_tree->Write();
-  tpc_pds_tree->Write();
+  anode_tree->Write("", TObject::kOverwrite);
+  tpc_pds_tree->Write("", TObject::kOverwrite);
   h_exp->Write();
   h_expreco->Write();
   he_hit_prob->Write();
   h2_exp_reco->Write();
+  h2_exp_reco_profile->Write();
+  h2_exp_reco_profile_stddev->Write();
   g_poisson_hitprob->Write();
   out_file->Close();
 

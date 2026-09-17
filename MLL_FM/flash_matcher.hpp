@@ -11,6 +11,16 @@
 #include <vector>
 #include "Utils.hpp"
 
+
+
+
+#include "Math/Factory.h"
+#include "Math/Functor.h"
+#include "Math/Minimizer.h"
+
+#include <memory>
+
+
 class VertexInfo {
   public:
     float x;
@@ -78,6 +88,14 @@ class ClusterPDS{
     }
 };
 
+struct EnergyFitResult {
+    double E;
+    double E_err;
+    double NLL;
+    bool converged;
+};
+
+
 class LikelihoodComputer{
 
 public:
@@ -86,7 +104,6 @@ public:
   float x_reco;
   TMVA::TSpline1* g_he = nullptr;
   float xprob_max = 0.;
-  float n_hit;
   std::vector<float> exp_phs;
 
   // For ML purposes
@@ -101,7 +118,222 @@ public:
   float exp_ph_sum = 0.;
   float nhit_expected = 0.;
 
-  
+  std::string calib_method = "true_energy"; // "true_energy" or "charge"
+  float electron_lifetime = 0.;
+ 
+
+  float GetLikelihoodMatchFit(const ClusterTPC& tpc_cluster,
+                           const ClusterPDS& pds_cluster,
+                           float x_sign = -1.,
+                           float E_reco = 0) {
+
+    float dt = tpc_cluster.time_tpc - pds_cluster.time_pds ;
+    float reco_pe, exp_ph;
+    x_reco = (geom.geom_identifier=="dune10kt") ? geom.anode_x+x_sign*dt*drift_velocity : geom.anode_x-dt*drift_velocity;
+    float vertex_coor[3] = {x_reco, tpc_cluster.y_reco, tpc_cluster.z_reco};
+    vertex_coor[0] = std::max(vertex_coor[0], tpc_min[0]+15); vertex_coor[0] = std::min(vertex_coor[0], tpc_max[0]-15);
+    vertex_coor[1] = std::max(vertex_coor[1], tpc_min[1]+15); vertex_coor[1] = std::min(vertex_coor[1], tpc_max[1]-15);
+    vertex_coor[2] = std::max(vertex_coor[2], tpc_min[2]+15); vertex_coor[2] = std::min(vertex_coor[2], tpc_max[2]-15);
+    int tpc_index = GetTPCIndex(vertex_coor, hgrid, cryo_to_tpc);
+
+    float NLL = 0.;
+    float term = 0.;
+
+    if (geom.n_opdet != pds_cluster.reco_pes.size()){
+      std::cerr << "Error: Number of OPDet does not match the size of reco_pes vector!" << std::endl;
+      exit(1);
+    }
+
+    for (size_t idx_opdet=0; idx_opdet<pds_cluster.reco_pes.size(); idx_opdet++){
+      float voxel_vis = opDet_visMap[tpc_index][idx_opdet];// + opDet_visDirect_ArMapReflct[tpc_index][idx_opdet];
+
+      exp_ph = E_reco*LY_times_PDE*voxel_vis;
+      if(exp_ph==0) exp_ph = E_reco*LY_times_PDE*1.e-15;
+      float P_hit_mu = (exp_ph<xprob_max) ? g_he->Eval(exp_ph) : 1.; // Avoid weird extrapolation where we
+      //                                                             // have no points in the efficiency graph,
+      //                                                             // and just assume that the hit probability is 1 for very high expected PE.
+      if (P_hit_mu <= 0.) P_hit_mu = 1.e-6;
+      if (P_hit_mu >= 1.) P_hit_mu = 1. - 1.e-6;
+
+      reco_pe = pds_cluster.reco_pes.at(idx_opdet);
+
+      if (reco_pe>0.0){
+        if (exp_ph > trend_thr){
+          f_RecoExpDistr->SetParameters(f_par1_trend->Eval(exp_ph), f_par2_trend->Eval(exp_ph));
+          term = -log(P_hit_mu*f_RecoExpDistr->Eval(reco_pe));
+          NLL += term;
+        } else {
+          f_RecoExpDistr->SetParameters(g_par1->Eval(exp_ph), g_par2->Eval(exp_ph));
+          term = -log(P_hit_mu*f_RecoExpDistr->Eval(reco_pe));
+          NLL += (term);
+        }
+      } else {
+        term = -log(1. - P_hit_mu);
+        NLL += term;
+      }
+    }
+
+    return NLL;
+  }
+
+
+
+EnergyFitResult FitEnergyMinuit(
+    const ClusterTPC& tpc_cluster,
+    const ClusterPDS& pds_cluster,
+    double x_sign,
+    double E_seed,
+    double E_min,
+    double E_max)
+{
+    auto nll = [&](const double* par) {
+        const double E = par[0];
+
+        return GetLikelihoodMatchFit(
+            tpc_cluster,
+            pds_cluster,
+            x_sign,
+            E
+        );
+    };
+
+    ROOT::Math::Functor f(nll, 1);
+
+    std::unique_ptr<ROOT::Math::Minimizer> minimizer(
+        ROOT::Math::Factory::CreateMinimizer("Minuit2", "Migrad")
+    );
+
+    minimizer->SetFunction(f);
+
+    minimizer->SetMaxFunctionCalls(10000);
+    minimizer->SetMaxIterations(1000);
+    minimizer->SetTolerance(1.e-3);
+
+    // Important for -log(L), rather than chi2
+    minimizer->SetErrorDef(0.5);
+
+    const double step = std::max(1.e-3, 0.01 * E_seed);
+
+    minimizer->SetLimitedVariable(
+        0,          // parameter index
+        "E_reco",   // parameter name
+        E_seed,     // initial value
+        step,       // initial step
+        E_min,
+        E_max
+    );
+
+    const bool converged = minimizer->Minimize();
+
+    EnergyFitResult result;
+
+    result.E         = minimizer->X()[0];
+    result.E_err     = minimizer->Errors()[0];
+    result.NLL       = minimizer->MinValue();
+    result.converged = converged;
+
+    return result;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   float GetLikelihoodMatch(const ClusterTPC& tpc_cluster,
                            const ClusterPDS& pds_cluster,
                            std::vector<float>& reco_terms,
@@ -113,7 +345,7 @@ public:
     if (noreco_terms.size() >= 0) noreco_terms.clear();
     
     float dt = tpc_cluster.time_tpc - pds_cluster.time_pds ;
-    E_reco = give_me_Ereco(calib_c, calib_slope, corr_lambda, dt, tpc_cluster.charge);
+    E_reco = (calib_method == "true_energy") ? give_me_Ereco(calib_c, calib_slope, corr_lambda, dt, tpc_cluster.charge) : give_me_Ereco(tpc_cluster.charge, dt, electron_lifetime);
     float reco_pe, exp_ph;
     x_reco = (geom.geom_identifier=="dune10kt") ? geom.anode_x+x_sign*dt*drift_velocity : geom.anode_x-dt*drift_velocity;
     float vertex_coor[3] = {x_reco, tpc_cluster.y_reco, tpc_cluster.z_reco};
@@ -123,21 +355,13 @@ public:
     int tpc_index = GetTPCIndex(vertex_coor, hgrid, cryo_to_tpc);
 
     float NLL = 0.;
-    // std::cout << "yyy" << NLL << std::endl;
     float term = 0.;
-    n_hit = std::count_if(pds_cluster.reco_pes.begin(), pds_cluster.reco_pes.end(), [](float pe){ return pe > 0; });
 
     if (geom.n_opdet != pds_cluster.reco_pes.size()){
       std::cerr << "Error: Number of OPDet does not match the size of reco_pes vector!" << std::endl;
       exit(1);
     }
 
-    float weight_hit = 1.;
-    float weight_unhit = 1.;
-    // float weight_hit = 1./(n_hit*n_hit);
-    // float weight_unhit = 1./(n_hit*n_hit);
-    float weight_sum = 1.;
-    // float weight_sum = 1./(std::accumulate(pds_cluster.reco_pes->begin(), pds_cluster.reco_pes->end(), 0.));
     for (size_t idx_opdet=0; idx_opdet<pds_cluster.reco_pes.size(); idx_opdet++){
       float voxel_vis = opDet_visMap[tpc_index][idx_opdet];// + opDet_visDirect_ArMapReflct[tpc_index][idx_opdet];
 
@@ -157,7 +381,7 @@ public:
       if (reco_pe>0.0){
         if (exp_ph > trend_thr){
           f_RecoExpDistr->SetParameters(f_par1_trend->Eval(exp_ph), f_par2_trend->Eval(exp_ph));
-          term = -log(P_hit_mu*f_RecoExpDistr->Eval(reco_pe))*weight_hit;
+          term = -log(P_hit_mu*f_RecoExpDistr->Eval(reco_pe));
           // term = -log(P_hit_mu*f_RecoExpDistr->Eval(reco_pe)/f_RecoExpDistr->Eval(exp(f_par1_trend->Eval(exp_ph)-pow(f_par2_trend->Eval(exp_ph),2))))*weight_hit;
           // term = -log(P_hit_mu*f_RecoExpDistr->Integral(reco_pe-sqrt(reco_pe)*0.5, reco_pe+sqrt(reco_pe)*0.5, 0.001))*weight_hit;
           NLL += term;
@@ -165,7 +389,7 @@ public:
           // std::cout <<  "t " << term << " " << NLL << std::endl;
         } else {
           f_RecoExpDistr->SetParameters(g_par1->Eval(exp_ph), g_par2->Eval(exp_ph));
-          term = -log(P_hit_mu*f_RecoExpDistr->Eval(reco_pe))*weight_hit;
+          term = -log(P_hit_mu*f_RecoExpDistr->Eval(reco_pe));
           // term = -log(P_hit_mu*h2_exp_reco->Interpolate(reco_pe, exp_ph))*weight_hit;
           // term = -log(P_hit_mu*f_RecoExpDistr->Eval(reco_pe)/f_RecoExpDistr->Eval(exp(g_par1->Eval(exp_ph)-pow(g_par2->Eval(exp_ph),2))))*weight_hit;
           // term = -log(P_hit_mu*f_RecoExpDistr->Integral(reco_pe-sqrt(reco_pe)*0.5, reco_pe+sqrt(reco_pe)*0.5, 0.001))*weight_hit;
@@ -174,7 +398,7 @@ public:
           // std::cout << "d " << term << " " << NLL << std::endl;
         }
       } else {
-        term = -log(1. - P_hit_mu)*weight_unhit;
+        term = -log(1. - P_hit_mu);
         NLL += term;
         noreco_terms.push_back(term);
           // std::cout << "e " << term << " " << NLL << std::endl;
@@ -190,7 +414,7 @@ public:
     noreco_term_max  = (noreco_terms.size()>0) ? *std::max_element(noreco_terms.begin(), noreco_terms.end()) : 0.;
     noreco_term_min  = (noreco_terms.size()>0) ? *std::min_element(noreco_terms.begin(), noreco_terms.end()) : 0.;
 
-    return NLL*weight_sum;
+    return NLL;
   } // GetLikelihoodMatch
 
   // LikelihoodComputer constructor

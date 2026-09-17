@@ -23,6 +23,8 @@ void fm_ana(){
   std::string visibility_dir   = mll_conf.visibility_dir;
   size_t n_combinations        = mll_conf.n_combinations;
   bool loop_on_tpc_clusters    = mll_conf.loop_on_tpc_clusters;
+  std::string calib_method     = mll_conf.calib_method;
+  float electron_lifetime     = mll_conf.electron_lifetime;
   
   SampleConfigs sample_conf = load_sample_config("./configs/"+sample_config_file);
   std::string input_dir        = sample_conf.input_dir;
@@ -35,7 +37,7 @@ void fm_ana(){
   
 
   // --- INPUTS ---------------------------------------------------------------
-  TFile* calib_file = TFile::Open((input_dir+"MLL_Calibrator_"+geom_identifier+".root").c_str(), "READ");
+  TFile* calib_file = TFile::Open((input_dir+"MLL_Calibrator_"+geom_identifier+"_"+calib_method+".root").c_str(), "READ");
   TTree* calib_tree = static_cast<TTree*>(calib_file->Get("calib_tree"));
   Float_t calib_c = 0.;         Float_t calib_slope = 0.;
   Float_t drift_velocity = 0.0; Float_t corr_lambda = 0.0;
@@ -45,12 +47,12 @@ void fm_ana(){
   calib_tree->SetBranchAddress("corr_lambda", &corr_lambda);
   calib_tree->GetEntry(0);
 
-  TFile* distribution_file = TFile::Open((input_dir+"MLL_Distributions_"+geom_identifier+".root").c_str(), "READ");
+  TFile* distribution_file = TFile::Open((input_dir+"MLL_Distributions_"+geom_identifier+"_"+calib_method+".root").c_str(), "READ");
   TTree* tpc_pds_tree = static_cast<TTree*>(distribution_file->Get("tpc_pds_tree"));
   std::vector<size_t> MaxChargeIndxs = take_max_charge_indices(tpc_pds_tree, "iev", "charge");
   int ifile, iev;
   float charge, time_tpc, time_pds, y_reco, z_reco, e_reco;
-  float x_true, y_true, z_true, e_true;
+  float x_true, y_true, z_true, e_true, e_main;
   std::vector<float>* reco_pes = nullptr;
   std::vector<float>* exp_phs = nullptr;
   tpc_pds_tree->SetBranchAddress("reco_pes", &reco_pes);
@@ -67,8 +69,9 @@ void fm_ana(){
   tpc_pds_tree->SetBranchAddress("y_true", &y_true);
   tpc_pds_tree->SetBranchAddress("z_true", &z_true);
   tpc_pds_tree->SetBranchAddress("e_true", &e_true);
+  tpc_pds_tree->SetBranchAddress("e_main", &e_main);
 
-  TFile* parametrizer_file  = TFile::Open((input_dir+"MLL_Parametrizer_"+geom_identifier+".root").c_str(), "READ");
+  TFile* parametrizer_file  = TFile::Open((input_dir+"MLL_Parametrizer_"+geom_identifier+"_"+calib_method+".root").c_str(), "READ");
   TF1* f_RecoExpDistr       = static_cast<TF1*>(parametrizer_file->Get("f_RecoExpDistr"));
   TF1* f_par1_trend         = static_cast<TF1*>(parametrizer_file->Get("f_par1_trend"));
   TF1* f_par2_trend         = static_cast<TF1*>(parametrizer_file->Get("f_par2_trend"));
@@ -79,8 +82,8 @@ void fm_ana(){
   TEfficiency* he_hit_prob = static_cast<TEfficiency*>(parametrizer_file->Get("he_hit_prob"));
 
   // --- HISTOS -----------------------------------------------------------------
-  std::string loop_string = (loop_on_tpc_clusters) ? "LoopOnTPCClusters" : "LoopOnPDSClusters";
-  TFile* out_file = TFile::Open((input_dir+"MLL_AnaOutput_"+geom_identifier+"_"+loop_string+".root").c_str(), "RECREATE");
+  std::string loop_string = (loop_on_tpc_clusters) ? "_LoopOnTPCClusters" : "_LoopOnPDSClusters";
+  TFile* out_file = TFile::Open((input_dir+"MLL_AnaOutput_"+geom_identifier+"_"+calib_method+loop_string+".root").c_str(), "RECREATE");
   float t_x_true, t_y_true, t_z_true, t_e_true, t_x_reco, t_y_reco, t_z_reco, t_e_reco, t_NLL, t_nhits;
   float f_x_true, f_y_true, f_z_true, f_e_true, f_x_reco, f_y_reco, f_z_reco, f_e_reco, f_NLL, f_nhits;
   std::vector<float>* t_reco_pes = nullptr; std::vector<float>* t_exp_phs = nullptr; std::vector<float>* t_reco_terms = nullptr; std::vector<float>* t_noreco_terms = nullptr;
@@ -121,10 +124,10 @@ void fm_ana(){
   TH1D* h_nmismatch = new TH1D("h_nmismatch",Form("%s;%s;%s","h_nmismatch","#Mismatch","Counts"), n_combinations, -0.5, float(n_combinations)-0.5);
 
   TH1D* h_TrueRecoTerms = new TH1D("h_TrueRecoTerms",Form("%s;%s;%s","h_TrueRecoTerms","Reco Terms for True Match","counts"),
-                                    200, 0, 100);
+                                    200, 0, 7);
 
   TH1D* h_TrueNoRecoTerms = new TH1D("h_TrueNoRecoTerms",Form("%s;%s;%s","h_TrueNoRecoTerms","NoReco Terms for True Match","counts"),
-                                    200, 0, 100);
+                                    200, 0, 7);
 
   TH1D* h_FakeRecoTerms = new TH1D("h_FakeRecoTerms",Form("%s;%s;%s","h_FakeRecoTerms","Reco Terms for Fake Match","counts"),
                                     200, 0, 100);
@@ -182,6 +185,16 @@ void fm_ana(){
                                   Form("%s;%s;%s", "h2_Ereco_Etrue", "E_{true} [MeV]", "E_{reco} [MeV]"),
                                   200, 0, 30,
                                   200, 0, 30);
+
+  TH2D* h2_Ereco_Emain = new TH2D("h2_Ereco_Emain",
+                                  Form("%s;%s;%s", "h2_Ereco_Emain", "E_{main} [MeV]", "E_{reco} [MeV]"),
+                                  200, 0, 30,
+                                  200, 0, 30);
+
+  TH2D* h2_Ereco_Erecol = new TH2D("h2_Ereco_Erecol",
+                                  Form("%s;%s;%s", "h2_Ereco_Erecol", "E_{reco} [MeV]", "E_{reco} [MeV]"),
+                                  200, 0, 30,
+                                  200, 0, 30);
   
   TH2D* h2_Ydiff_Zdiff = new TH2D("h2_Ydiff_Zdiff",
                                  Form("%s;%s;%s", "h2_Ydiff_Zdiff", "Y_{True}-Y_{Reco} [cm]", "Z_{True}-Z_{Reco} [cm]"),
@@ -206,7 +219,10 @@ void fm_ana(){
     corr_lambda,          // Correction lambda value
     h2_exp_reco
   );
+  likelihood_computer.calib_method = calib_method;
+  likelihood_computer.electron_lifetime = electron_lifetime;
 
+  std::vector<float> e_trues, e_recos, e_mains;
 
   // --- LOOP OVER TPC-PDS CLUSTERS ---------------------------------------------
   float ntry = 0; float nmismatch = 0; float ninfinity = 0; float n_equal = 0;
@@ -256,6 +272,11 @@ void fm_ana(){
 
     std::vector<float> true_reco_terms, true_noreco_terms;
     float true_NLL = likelihood_computer.GetLikelihoodMatch(true_tpc_cluster, true_pds_cluster, true_reco_terms, true_noreco_terms, x_sign);
+    EnergyFitResult fit_res = likelihood_computer.FitEnergyMinuit(true_tpc_cluster, true_pds_cluster, x_sign, likelihood_computer.E_reco, 4., 30.);
+    e_trues.push_back(e_true);
+    e_mains.push_back(e_main);
+    e_recos.push_back(fit_res.E);
+    h2_Ereco_Erecol->Fill(fit_res.E, likelihood_computer.E_reco);
     // std::cout << "vvvv " << -true_NLL << std::endl;
     // push back the true log-likelihood to the vector if not inf or nan
     if (!std::isinf(true_NLL) && !std::isnan(true_NLL)) LLs_true.push_back(true_NLL);
@@ -266,6 +287,7 @@ void fm_ana(){
 
     h2_xreco_xtrue->Fill(x_true, likelihood_computer.x_reco);
     h2_Ereco_Etrue->Fill(e_true, likelihood_computer.E_reco);
+    h2_Ereco_Emain->Fill(e_main, likelihood_computer.E_reco);
     h2_Ydiff_Zdiff->Fill(y_reco - y_true, z_reco - z_true);
     h_dx->Fill(likelihood_computer.x_reco - x_true);
 
@@ -274,7 +296,7 @@ void fm_ana(){
     t_y_reco = y_reco; t_z_reco = z_reco; t_e_reco = e_reco;
     std::vector<float> tmp_exp_phs = likelihood_computer.exp_phs;
     t_reco_pes = reco_pes; t_exp_phs = &tmp_exp_phs;
-    t_x_reco = likelihood_computer.x_reco; t_NLL = true_NLL; t_nhits = likelihood_computer.n_hit;
+    t_x_reco = likelihood_computer.x_reco; t_NLL = true_NLL; t_nhits = true_noreco_terms.size();
     t_reco_terms = &true_reco_terms; t_noreco_terms = &true_noreco_terms;
 
     // --- Compute likelihood for each combination of TPC and PDS clusters
@@ -319,7 +341,7 @@ void fm_ana(){
         // Set mismatch_tree variables for the fake match
         f_x_true = fake_vertex_infos[i].x; f_y_true = fake_vertex_infos[i].y; f_z_true = fake_vertex_infos[i].z; f_e_true = fake_vertex_infos[i].energy;
         f_x_reco = likelihood_computer.x_reco; f_y_reco = fake_tpc_clusters[i].y_reco; f_z_reco = fake_tpc_clusters[i].z_reco;
-        f_e_reco = likelihood_computer.E_reco; f_NLL = fake_NLL; f_nhits = likelihood_computer.n_hit;
+        f_e_reco = likelihood_computer.E_reco; f_NLL = fake_NLL; f_nhits = fake_reco_terms.size();
         f_reco_pes = reco_pes; f_exp_phs = &likelihood_computer.exp_phs;
         f_reco_terms = &fake_reco_terms; f_noreco_terms = &fake_noreco_terms;
         mismatch_tree->Fill();
@@ -363,6 +385,22 @@ void fm_ana(){
   std::printf("False matches %.0f (%.3f%%) of reco_terms and %.0f (%.3f%%) of non-reco\n",
               h_FakeRecoTerms->GetEntries(), h_FakeRecoTerms->GetEntries()/(geom.n_opdet*h_LL_fake->GetEntries())*100,
               h_FakeNoRecoTerms->GetEntries(), h_FakeNoRecoTerms->GetEntries()/(geom.n_opdet*h_LL_fake->GetEntries())*100);
+
+  // Create a TH2D for the correlation between true and reconstructed energy 
+  TH2D* h2_Ereco_Etruel = new TH2D("h2_Ereco_Etruel",
+                                  Form("%s;%s;%s", "h2_Ereco_Etruel", "E_{true} [MeV]", "E_{reco} [MeV]"),
+                                  200, 0, 30,
+                                  200, 0, *std::max_element(e_recos.begin(), e_recos.end()));
+
+  TH2D* h2_Ereco_Emainl = new TH2D("h2_Ereco_Emainl",
+                                  Form("%s;%s;%s", "h2_Ereco_Emainl", "E_{main} [MeV]", "E_{reco} [MeV]"),
+                                  200, 0, 30,
+                                  200, 0, *std::max_element(e_recos.begin(), e_recos.end()));
+
+  for (size_t i = 0; i < e_trues.size(); i++) {
+    h2_Ereco_Etruel->Fill(e_trues[i], e_recos[i]);
+    h2_Ereco_Emainl->Fill(e_mains[i], e_recos[i]);
+  }
   
 
   // --- WRITE OUTPUT ----------------------------------------------------------
@@ -391,6 +429,10 @@ void fm_ana(){
   h2_de_dz_mis->Write();
   h2_xreco_xtrue->Write();
   h2_Ereco_Etrue->Write();
+  h2_Ereco_Emain->Write();
+  h2_Ereco_Etruel->Write();
+  h2_Ereco_Emainl->Write();
+  h2_Ereco_Erecol->Write();
   h2_Ydiff_Zdiff->Write();
   h2_exp_reco->Write();
   h_nmismatch->Write();

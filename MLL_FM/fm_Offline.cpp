@@ -9,6 +9,7 @@
 
 #include "Utils.hpp"
 #include "flash_matcher.hpp"
+#include <cstddef>
 #include <cstdio>
 #include <vector>
 
@@ -23,10 +24,12 @@ void fm_Offline(){
   MLLConfigs mll_conf = load_ana_config("./configs/ana_config.json");
   std::string sample_config_file = mll_conf.sample_config_file;
   std::string ana_file_name      = mll_conf.ana_file_name;
-  std::string visibility_dir         = mll_conf.visibility_dir;
+  std::string visibility_dir     = mll_conf.visibility_dir;
   float light_yield              = mll_conf.light_yield;
   float arapuca_pde              = mll_conf.arapuca_pde;
+  bool use_preselection          = mll_conf.use_preselection;
   float LY_times_PDE             = light_yield * arapuca_pde;
+  std::string calib_method       = mll_conf.calib_method;
   
   SampleConfigs sample_conf = load_sample_config("./configs/"+sample_config_file);
   std::string input_dir        = sample_conf.input_dir;
@@ -37,7 +40,6 @@ void fm_Offline(){
   
   TString visibility_file_name = TString(visibility_dir+"dunevis_"+geom_identifier+".root");
   
-  // TFile* ana_file = TFile::Open("../MLL_FM/debugs/files/solar_ana_dune10kt_1x2x6_hist.root", "READ");
   TFile* ana_file = TFile::Open((input_dir+ana_file_name).c_str(), "READ");
   TTree* tree = static_cast<TTree*>(ana_file->Get("solarnuana/SolarNuAnaTree"));
   std::vector<size_t> MaxChargeIndxs = take_max_charge_indices(tree, "Event", "Charge");
@@ -54,12 +56,13 @@ void fm_Offline(){
   TTreeReaderValue<float> Time(treeReader,  "Time");
   TTreeReaderValue<int>   TPC(treeReader, "TPC");
   // Adj. flashes stuff
-  TTreeReaderArray<float> MAdjFlashResidual(treeReader, "AdjOpFlashResidual");
+  TTreeReaderArray<float> MAdjFlashNegativeLL(treeReader, "AdjOpFlashNegativeLL");
   TTreeReaderArray<float> MAdjFlashTime(treeReader, "AdjOpFlashTime");
   TTreeReaderArray<float> MAdjFlashFast(treeReader, "AdjOpFlashFast");
   TTreeReaderArray<float> MAdjFlashPur(treeReader, "AdjOpFlashPur");
   TTreeReaderArray<int>   MAdjFlashNHits(treeReader, "AdjOpFlashNHits");
   TTreeReaderArray<float> MAdjFlashPE(treeReader, "AdjOpFlashPE");
+  TTreeReaderArray<bool>  AdjOpFlashPreselection(treeReader, "AdjOpFlashPreselection");
   TTreeReaderArray<float> MAdjFlashPEperOpDet(treeReader, "AdjOpFlashPEperOpDet");
   // Matched flash stuff
   TTreeReaderValue<float> MatchedOpFlashTime(treeReader, "MatchedOpFlashTime");
@@ -79,7 +82,7 @@ void fm_Offline(){
   calib_tree->SetBranchAddress("corr_lambda", &corr_lambda);
   calib_tree->GetEntry(0);
   
-  TFile* parametrizer_file  = TFile::Open((input_dir+"MLL_Parametrizer_"+geom_identifier+".root").c_str(), "READ");
+  TFile* parametrizer_file  = TFile::Open((input_dir+"MLL_Parametrizer_"+geom_identifier+"_"+calib_method+".root").c_str(), "READ");
   TF1* f_reco_prob          = static_cast<TF1*>(parametrizer_file->Get("f_reco_prob"));
   TF1* f_RecoExpDistr       = static_cast<TF1*>(parametrizer_file->Get("f_RecoExpDistr"));
   TF1* f_par1_trend         = static_cast<TF1*>(parametrizer_file->Get("f_par1_trend"));
@@ -108,9 +111,11 @@ void fm_Offline(){
   );
 
   // --- OUTPUT PLOTS ---------------------------------------------------------
-  TFile* output_file = TFile::Open((input_dir+"/MLL_Offline_"+geom_identifier+".root").c_str(), "RECREATE");
+  TFile* output_file = TFile::Open((input_dir+"/MLL_Offline_"+geom_identifier+"_"+calib_method+".root").c_str(), "RECREATE");
   Long64_t nn = tree->Draw("SignalParticleX", "", "goff");
-  float max_drift = TMath::MaxElement(tree->GetSelectedRows(), tree->GetV1());
+  float max_drift = (geom_identifier == "dune10kt") ?
+                      TMath::MaxElement(tree->GetSelectedRows(), tree->GetV1()) :
+                      TMath::MaxElement(tree->GetSelectedRows(), tree->GetV1()) - TMath::MinElement(tree->GetSelectedRows(), tree->GetV1());
   TEfficiency* he_EffvsDrift       = new TEfficiency("he_eff_drift_nll",   "Efficiency vs Drift; Drift [cm]; Efficiency", 30, 0., double(max_drift));
   TEfficiency* he_EffvsDrift_cheat = new TEfficiency("he_eff_drift_cheat", "Efficiency vs Drift; Drift [cm]; Efficiency", 30, 0., double(max_drift));
   TEfficiency* he_EffvsDrift_maxpe = new TEfficiency("he_eff_drift_maxpe", "Efficiency vs Drift; Drift [cm]; Efficiency", 30, 0., double(max_drift));
@@ -190,15 +195,17 @@ void fm_Offline(){
   size_t n_match = 0;
   size_t n_match_cheating = 0;
   size_t n_noflash = 0;
+  size_t max_idx = MaxChargeIndxs[MaxChargeIndxs.size()-1];
   for (auto& idx_entry : MaxChargeIndxs){
     treeReader.SetEntry(idx_entry);
-    if (idx_entry % 100 == 0) std::cout <<idx_entry<<"/"<< MaxChargeIndxs.size()<< "\r" << std::flush;
+    if (idx_entry % 100 == 0) std::cout <<idx_entry<<"/"<< max_idx << "\r" << std::flush;
   // while (treeReader.Next()) {
     if (MAdjFlashPE.GetSize()==0) {
       // std::cout << "No flash PE information available!" << std::endl;
-      he_EffvsDrift->Fill(false, abs(*SignalParticleX));
-      he_EffvsDrift_cheat->Fill(false, abs(*SignalParticleX));
-      he_EffvsDrift_maxpe->Fill(false, abs(*SignalParticleX));
+      float x_drift = geom_identifier == "dune10kt" ? abs(*SignalParticleX) : geom.anode_x-(*SignalParticleX); 
+      he_EffvsDrift->Fill(false, x_drift);
+      he_EffvsDrift_cheat->Fill(false, x_drift);
+      he_EffvsDrift_maxpe->Fill(false, x_drift);
       n_try++; n_noflash++;
       continue;
     }
@@ -211,18 +218,20 @@ void fm_Offline(){
     float purity = -1.;
     ClusterTPC tpc_cluster = ClusterTPC(*Charge, *Time, *RecoY, *RecoZ);
 
-    for (size_t idx_flash=0; idx_flash<MAdjFlashResidual.GetSize(); idx_flash++){
+    for (size_t idx_flash=0; idx_flash<MAdjFlashNegativeLL.GetSize(); idx_flash++){
+      if (use_preselection && !AdjOpFlashPreselection.At(idx_flash)) continue;
       for(size_t j=0; j<geom.n_opdet; j++) reco_pes[j] = MAdjFlashPEperOpDet.At(idx_flash*geom.n_opdet + j);
 
       float flash_fast = MAdjFlashFast.At(idx_flash);
       float flash_time = MAdjFlashTime.At(idx_flash);
-      float flash_residual = MAdjFlashResidual.At(idx_flash);
+      float flash_residual = MAdjFlashNegativeLL.At(idx_flash);
       float flash_pe = MAdjFlashPE.At(idx_flash);
       float flash_nhits = MAdjFlashNHits.At(idx_flash);
       ClusterPDS pds_cluster = ClusterPDS(flash_time, reco_pes);
       float x_sign = (geom_identifier == "dune10kt" && (*TPC % 2 == 0)) ? -1. : 1.;
     
       float offline_likelihood = likelihood_computer.GetLikelihoodMatch(tpc_cluster, pds_cluster, reco_terms, noreco_terms, x_sign);
+      // offline_likelihood = offline_likelihood/(flash_nhits*flash_nhits);
       // offline_likelihood *= flash_fast; // Scale the likelihood by the flash fast component
 
       if (MAdjFlashPE.At(idx_flash) == *MatchedOpFlashPE && MAdjFlashTime.At(idx_flash) == *MatchedOpFlashTime){
@@ -284,11 +293,12 @@ void fm_Offline(){
     } // End loop over adjacent flashes
     
     n_try++;
-    
-    he_EffvsDrift->Fill((purity>0.), abs(*SignalParticleX));
-    he_EffvsDrift_cheat->Fill(*MatchedOpFlashCorrectly, abs(*SignalParticleX));
-    if (idx_selected_max>=0) he_EffvsDrift_maxpe->Fill((MAdjFlashPur.At(idx_selected_max))>0., abs(*SignalParticleX));
-    else he_EffvsDrift_maxpe->Fill(false, abs(*SignalParticleX));
+   
+    float x_drift = geom_identifier == "dune10kt" ? abs(*SignalParticleX) : geom.anode_x-(*SignalParticleX);
+    he_EffvsDrift->Fill((purity>0.), x_drift);
+    he_EffvsDrift_cheat->Fill(*MatchedOpFlashCorrectly, x_drift);
+    if (idx_selected_max>=0) he_EffvsDrift_maxpe->Fill((MAdjFlashPur.At(idx_selected_max))>0., x_drift);
+    else he_EffvsDrift_maxpe->Fill(false, x_drift);
 
     if (purity > 0.) n_match++;
     if(*MatchedOpFlashCorrectly) n_match_cheating++;
