@@ -19,12 +19,23 @@ feature_fraction = 0.8
 bagging_fraction = 0.8
 bagging_freq = 1
 lambda_l2 = 1.0
+def best_second_gap(s):
+    values = np.sort(s.to_numpy())
+
+    if len(values) < 2:
+        return 0.0
+
+    return values[1] - values[0]
+
+
 
 def add_relative_features(df):
-
     df = df.copy()
     g = df.groupby("event_id", group_keys=False)
-    
+
+    # ---------------------------------------------------------
+    # Existing rank features
+    # ---------------------------------------------------------
     df["nll_rank"] = g["nll_weighted"].rank(
         ascending=True,
         method="first"
@@ -53,6 +64,31 @@ def add_relative_features(df):
     df["abs_dt_nearest_flash_rank"] = g["abs_dt_nearest_flash"].rank(
         ascending=True,
         method="first"
+    )
+
+    # ---------------------------------------------------------
+    # Relative NLL features
+    # ---------------------------------------------------------
+
+    # Distance from the best likelihood candidate in the event
+    df["nll_delta_best"] = (
+        df["nll_weighted"]
+        - g["nll_weighted"].transform("min")
+    )
+
+    # Standardized NLL within the event
+    nll_mean = g["nll_weighted"].transform("mean")
+    nll_std  = g["nll_weighted"].transform("std")
+
+    df["nll_zscore"] = (
+        (df["nll_weighted"] - nll_mean)
+        / nll_std.replace(0, 1.0).fillna(1.0)
+    )
+
+    gap_by_event = g["nll_weighted"].apply(best_second_gap)
+
+    df["nll_best_second_gap"] = (
+        df["event_id"].map(gap_by_event)
     )
 
     return df
@@ -137,7 +173,9 @@ if __name__ == "__main__":
         "nhits_rank",
         "close_totalpe_rank",
         "close_nhits_rank",
-        "abs_dt_nearest_flash_rank"
+        "abs_dt_nearest_flash_rank",
+        "cos_sim", "l1_dist", "exp_reco_ratio_weighted", "exp_ph_w",
+        "nll_delta_best", "nll_zscore", "nll_best_second_gap"
     ]
 
 
@@ -155,6 +193,8 @@ if __name__ == "__main__":
             "bagging_fraction": bagging_fraction,
             "bagging_freq": bagging_freq,
             "lambda_l2": lambda_l2,
+            "lambdarank_truncation_level": 4,
+            "label_gain": [0, 2, 3],
             "verbose": -1
     }
 
@@ -326,21 +366,21 @@ if __name__ == "__main__":
     he_model  = ROOT.TEfficiency("he_eff_drift_model", "Matching Efficiency;Drift [cm];Efficiency", 30, 0., max_drift)
     he_max_pe = ROOT.TEfficiency("he_eff_drift_maxpe", "Matching Efficiency (max_pe);Drift [cm];Efficiency", 30, 0, max_drift)
     he_nll    = ROOT.TEfficiency("he_eff_drift_nll", "Matching Efficiency (nll);Drift [cm];Efficiency", 30, 0, max_drift)
-    he_cheat = ROOT.TEfficiency("he_eff_drift_cheat", "Matching Efficiency (cheat);Drift [cm];Efficiency", 30, 0, max_drift)
+    he_cheat  = ROOT.TEfficiency("he_eff_drift_cheat", "Matching Efficiency (cheat);Drift [cm];Efficiency", 30, 0, max_drift)
+
     # Create a dictionary of TEfficiency for e_true in the range (5,7) (7,9) (9,11) (11,13) (13,15) (15,17)
-    # givin the mid-point as name (6, 8, 10, 12, 14, 16)
     he_model_dict = {}
     he_max_pe_dict = {}
     he_nll_dict = {}
     he_cheat_dict = {}
-    energy_bins = [(5,7), (7,9), (9,11), (11,13), (13,15), (15,17)]
+    energy_bins = [(5,7), (7,9), (9,11), (11,13), (13,15), (15,17), (17,30)]
     for e_true_min, e_true_max in energy_bins:
         e_true_mid = int((e_true_min + e_true_max) / 2)
-        he_model_dict[e_true_mid] = ROOT.TEfficiency(f"he_eff_drift_model_e_{e_true_mid}", f"Matching Efficiency (e_true in ({e_true_min},{e_true_max}));Drift [cm];Efficiency", 30, 0., max_drift)
+        he_model_dict[e_true_mid]  = ROOT.TEfficiency(f"he_eff_drift_model_e_{e_true_mid}", f"Matching Efficiency (e_true in ({e_true_min},{e_true_max}));Drift [cm];Efficiency", 30, 0., max_drift)
         he_max_pe_dict[e_true_mid] = ROOT.TEfficiency(f"he_eff_drift_maxpe_e_{e_true_mid}", f"Matching Efficiency (max_pe, e_true in ({e_true_min},{e_true_max}));Drift [cm];Efficiency", 30, 0, max_drift)
-        he_nll_dict[e_true_mid] = ROOT.TEfficiency(f"he_eff_drift_nll_e_{e_true_mid}", f"Matching Efficiency (nll, e_true in ({e_true_min},{e_true_max}));Drift [cm];Efficiency", 30, 0, max_drift)
-        he_cheat_dict[e_true_mid] = ROOT.TEfficiency(f"he_eff_drift_cheat_e_{e_true_mid}", f"Matching Efficiency (cheat, e_true in ({e_true_min},{e_true_max}));Drift [cm];Efficiency", 30, 0, max_drift)
-    
+        he_nll_dict[e_true_mid]    = ROOT.TEfficiency(f"he_eff_drift_nll_e_{e_true_mid}", f"Matching Efficiency (nll, e_true in ({e_true_min},{e_true_max}));Drift [cm];Efficiency", 30, 0, max_drift)
+        he_cheat_dict[e_true_mid]  = ROOT.TEfficiency(f"he_eff_drift_cheat_e_{e_true_mid}", f"Matching Efficiency (cheat, e_true in ({e_true_min},{e_true_max}));Drift [cm];Efficiency", 30, 0, max_drift)
+
     for _, row in best.iterrows():
         catch = 1 if int(row["my_label"] > 0) else 0
         x_drift = abs(row["x_true"]) if geom_identifier == "dune10kt" else anode_x - row["x_true"]
@@ -355,12 +395,6 @@ if __name__ == "__main__":
             e_true_mid = (energy_bin[0] + energy_bin[1]) / 2
             he_model_dict[e_true_mid].Fill(catch, x_drift)
         
-        # catch = 1 if row["purity"] > 0. else 0
-        # he_model.Fill(catch, abs(row["x_true"]))
-
-
-
-    # df.loc[:, "my_label"] = (df["purity"] > 0).astype(int)
     tryes2 = 0
     max_pe_efficiency = 0
     max_nll_weighted_efficiency = 0
@@ -373,10 +407,6 @@ if __name__ == "__main__":
         catch_max_pe = 1 if int(best_max_pe["my_label"]) > 0 else 0
         catch_max_nll_weighted = 1 if int(best_max_nll_weighted["my_label"]) > 0 else 0
         catch_cheat = 1 if best_cheat["purity"] > 0 else 0
-
-        # catch_max_pe = 1 if best_max_pe["purity"] > 0. else 0
-        # catch_max_nll_weighted = 1 if best_max_nll_weighted["purity"] > 0. else 0
-        # catch_cheat = 1 if best_cheat["purity"] > 0. else 0
 
         x_drift = abs(best_max_pe["x_true"]) if geom_identifier == "dune10kt" else anode_x - best_max_pe["x_true"]
         he_max_pe.Fill(catch_max_pe, x_drift)
